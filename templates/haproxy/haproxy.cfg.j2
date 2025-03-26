@@ -22,7 +22,7 @@ backend kubernetes_masters
     mode tcp
     balance roundrobin
 {% for host in groups['masters'] %}
-    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
+    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 {% if enable_api_check | default(false) %}check{% else %}check disabled{% endif %}
 {% endfor %}
 
 frontend http_traffic

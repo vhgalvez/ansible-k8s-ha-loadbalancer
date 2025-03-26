@@ -9,6 +9,18 @@
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
 
   tasks:
+    - name: Verificar si el API Server (VIP) responde en el puerto 6443
+      wait_for:
+        host: "{{ api_vip }}"
+        port: 6443
+        timeout: 3
+      register: api_server_status
+      ignore_errors: yes
+
+    - name: Definir si se habilita 'check' en HAProxy
+      set_fact:
+        enable_api_check: "{{ api_server_status is not failed }}"
+
     - name: Instalar HAProxy y Keepalived
       package:
         name:
