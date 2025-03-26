@@ -1,0 +1,67 @@
+---
+- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API Load Balancing
+  hosts: haproxy_keepalived
+  become: true
+  vars:
+    haproxy_config_dir: "/etc/haproxy"
+    keepalived_config_dir: "/etc/keepalived"
+    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
+    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
+
+  tasks:
+    - name: Instalar HAProxy y Keepalived
+      package:
+        name:
+          - haproxy
+          - keepalived
+        state: present
+
+    - name: Asegurar que el directorio de configuración de HAProxy existe
+      file:
+        path: "{{ haproxy_config_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copiar configuración de HAProxy
+      template:
+        src: "{{ haproxy_config_template }}"
+        dest: "{{ haproxy_config_dir }}/haproxy.cfg"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reiniciar HAProxy
+
+    - name: Asegurar que el directorio de configuración de Keepalived existe
+      file:
+        path: "{{ keepalived_config_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copiar configuración de Keepalived
+      template:
+        src: "{{ keepalived_config_template }}"
+        dest: "{{ keepalived_config_dir }}/keepalived.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reiniciar Keepalived
+
+    - name: Habilitar y arrancar HAProxy y Keepalived
+      systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - haproxy
+        - keepalived
+
+  handlers:
+    - name: Reiniciar HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
+
+    - name: Reiniciar Keepalived
+      systemd:
+        name: keepalived
+        state: restarted
