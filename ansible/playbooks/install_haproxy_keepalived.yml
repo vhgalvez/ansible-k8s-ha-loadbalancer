@@ -10,6 +10,46 @@
 
   tasks:
 
+    - name: Asegurar que el grupo haproxy existe
+      group:
+        name: haproxy
+        state: present
+
+    - name: Asegurar que el usuario haproxy existe
+      user:
+        name: haproxy
+        group: haproxy
+        shell: /sbin/nologin
+        system: yes
+        create_home: no
+        state: present
+
+    - name: Asegurar que /run/haproxy existe y tiene permisos correctos
+      file:
+        path: /run/haproxy
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: '0755'
+
+    - name: Eliminar socket anterior si existe
+      file:
+        path: /run/haproxy/admin.sock
+        state: absent
+
+    - name: Establecer contexto SELinux para /var/run/haproxy (equivalente a /run/haproxy)
+      sefcontext:
+        target: '/var/run/haproxy(/.*)?'
+        setype: var_run_t
+        state: present
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
+    - name: Restaurar contexto SELinux en /run/haproxy
+      command: restorecon -Rv /run/haproxy
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
     - name: Verificar si el API Server (VIP) responde en el puerto 6443
       wait_for:
         host: "{{ api_vip }}"
@@ -27,20 +67,6 @@
         name:
           - haproxy
           - keepalived
-        state: present
-
-    - name: Asegurar que el grupo haproxy existe
-      group:
-        name: haproxy
-        state: present
-
-    - name: Asegurar que el usuario haproxy existe
-      user:
-        name: haproxy
-        group: haproxy
-        shell: /sbin/nologin
-        system: yes
-        create_home: no
         state: present
 
     - name: Obtener interfaz activa para Keepalived
@@ -81,19 +107,6 @@
         mode: "0644"
       notify: Reiniciar Keepalived
 
-    - name: Asegurar que /run/haproxy existe y tiene permisos correctos
-      file:
-        path: /run/haproxy
-        state: directory
-        owner: haproxy
-        group: haproxy
-        mode: '0755'
-
-    - name: Eliminar socket anterior si existe
-      file:
-        path: /run/haproxy/admin.sock
-        state: absent
-
     - name: Validar configuración de HAProxy
       command: haproxy -c -f /etc/haproxy/haproxy.cfg
       register: haproxy_check
@@ -102,19 +115,6 @@
 
     - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
       command: setsebool -P haproxy_connect_any 1
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
-    - name: Establecer contexto SELinux para /var/run/haproxy (equivalente a /run/haproxy)
-      sefcontext:
-        target: '/var/run/haproxy(/.*)?'
-        setype: haproxy_var_run_t
-        state: present
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
-    - name: Restaurar contexto SELinux en /run/haproxy
-      command: restorecon -Rv /run/haproxy
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
