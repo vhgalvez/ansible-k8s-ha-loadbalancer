@@ -16,7 +16,7 @@ vrrp_instance VI_1 {
 
     # Monitorizar el servicio HAProxy
     track_script {
-        script "pidof haproxy"  # Monitoriza si HAProxy está corriendo
+        script "/sbin/pidof haproxy"  # Monitoriza si HAProxy está corriendo
         interval 2
     }
 }
@@ -39,7 +39,7 @@ vrrp_instance VI_2 {
     }
 
     track_script {
-        script "pidof haproxy"  # Monitoriza si HAProxy está corriendo
+        script "/sbin/pidof haproxy"  # Monitoriza si HAProxy está corriendo
         interval 2
     }
 }
