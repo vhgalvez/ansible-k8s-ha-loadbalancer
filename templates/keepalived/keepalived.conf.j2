@@ -1,14 +1,14 @@
 vrrp_instance VI_1 {
     state MASTER
-    interface ens18  # <--- Cambiar si no es eth0
+    interface {{ keepalived_interface }}
     virtual_router_id 51
     priority 100
     advert_int 1
     authentication {
         auth_type PASS
-        auth_pass securepassword
+        auth_pass 12345678
     }
     virtual_ipaddress {
-        10.17.5.10
+        {{ api_vip }}
     }
 }
