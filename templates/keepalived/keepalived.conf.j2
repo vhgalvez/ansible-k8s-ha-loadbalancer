@@ -1,14 +1,45 @@
 vrrp_instance VI_1 {
     state MASTER
-    interface {{ keepalived_interface }}
+    interface eth0
     virtual_router_id 51
-    priority 100
+    priority 100  # Prioridad más alta para el nodo principal
+    advert_int 1  # Intervalo de anuncios VRRP
+    authentication {
+        auth_type PASS
+        auth_pass 12345678
+    }
+
+    # Asignación de la IP Virtual (VIP)
+    virtual_ipaddress {
+        10.17.5.10
+    }
+
+    # En el nodo maestro 1 (VIP asignado)
+    track_script {
+        script "pidof haproxy" # Monitoriza si HAProxy está corriendo
+        interval 2
+    }
+}
+
+# Configuración para el nodo de respaldo (para otros Load Balancers)
+vrrp_instance VI_2 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 90  # Menor prioridad
     advert_int 1
     authentication {
         auth_type PASS
         auth_pass 12345678
     }
+
+    # Asignación de la IP Virtual (VIP)
     virtual_ipaddress {
-        {{ api_vip }}
+        10.17.5.10
+    }
+
+    track_script {
+        script "pidof haproxy"
+        interval 2
     }
 }
