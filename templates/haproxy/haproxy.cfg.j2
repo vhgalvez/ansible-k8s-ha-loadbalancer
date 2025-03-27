@@ -28,3 +28,4 @@ backend kubernetes_masters
 {% for host in groups['masters'] %}
     server {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['ansible_host'] }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
 {% endfor %}
+
