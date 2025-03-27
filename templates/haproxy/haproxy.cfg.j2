@@ -1,40 +1,54 @@
 global
-    log /dev/log local0
-    log /dev/log local1 notice
-    chroot /var/lib/haproxy
-    stats socket /var/lib/haproxy/admin.sock mode 660 level admin
-    stats timeout 30s
-    user haproxy
-    group haproxy
+    log stdout format raw local0
+    maxconn 4096
     daemon
-    maxconn 2048
 
 defaults
     log     global
-    mode    tcp
-    option  tcplog
-    timeout connect 10s
-    timeout client   1m
-    timeout server   1m
+    mode    http
+    option  httplog
+    option  dontlognull
+    timeout connect 5s
+    timeout client  50s
+    timeout server  50s
 
+# Balanceador para la API de Kubernetes
 frontend kubernetes_api
     bind *:6443
+    mode tcp
     default_backend kubernetes_masters
 
 backend kubernetes_masters
     mode tcp
     balance roundrobin
-    option tcp-check
 {% for host in groups['masters'] %}
-    server master_{{ loop.index }} {{ hostvars[host].ansible_host }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
+    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
 {% endfor %}
 
-listen stats
-    bind *:8404
+# Tráfico HTTP hacia Workers
+frontend http_traffic
+    bind *:80
     mode http
-    stats enable
-    stats uri /stats
-    stats refresh 10s
-    stats realm Haproxy\ Statistics
-    stats auth admin:admin123
+    default_backend web_servers
 
+backend web_servers
+    mode http
+    balance roundrobin
+    option httpchk GET /healthz
+{% for host in groups['workers'] %}
+    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
+{% endfor %}
+
+# Tráfico HTTPS hacia Workers (con SSL passthrough)
+frontend https_traffic
+    bind *:443
+    mode tcp
+    default_backend web_servers_ssl
+
+backend web_servers_ssl
+    mode tcp
+    balance roundrobin
+    option ssl-hello-chk
+{% for host in groups['workers'] %}
+    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
+{% endfor %}
