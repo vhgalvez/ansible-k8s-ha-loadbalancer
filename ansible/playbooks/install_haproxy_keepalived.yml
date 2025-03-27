@@ -105,9 +105,9 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Establecer contexto SELinux para /run/haproxy (si aplica)
+    - name: Establecer contexto SELinux para /var/run/haproxy (equivalente a /run/haproxy)
       sefcontext:
-        target: '/run/haproxy(/.*)?'
+        target: '/var/run/haproxy(/.*)?'
         setype: haproxy_var_run_t
         state: present
       when: ansible_selinux.status == "enabled"
