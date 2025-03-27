@@ -7,9 +7,9 @@
     keepalived_config_dir: "/etc/keepalived"
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
+    haproxy_socket_dir: "/var/lib/haproxy"
 
   tasks:
-
     - name: Asegurar que el grupo haproxy existe
       group:
         name: haproxy
@@ -24,31 +24,31 @@
         create_home: no
         state: present
 
-    - name: Asegurar que /run/haproxy existe y tiene permisos correctos
+    - name: Crear {{ haproxy_socket_dir }} si no existe y aplicar permisos
       file:
-        path: /run/haproxy
+        path: "{{ haproxy_socket_dir }}"
         state: directory
         owner: haproxy
         group: haproxy
         mode: '0755'
 
-    - name: Eliminar socket anterior si existe
-      file:
-        path: /run/haproxy/admin.sock
-        state: absent
-
-    - name: Establecer contexto SELinux para /var/run/haproxy (equivalente a /run/haproxy)
+    - name: Establecer contexto SELinux para {{ haproxy_socket_dir }}
       sefcontext:
-        target: '/var/run/haproxy(/.*)?'
+        target: '{{ haproxy_socket_dir }}(/.*)?'
         setype: var_run_t
         state: present
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Restaurar contexto SELinux en /run/haproxy
-      command: restorecon -Rv /run/haproxy
+    - name: Restaurar contexto SELinux en {{ haproxy_socket_dir }}
+      command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
+
+    - name: Eliminar socket anterior si existe
+      file:
+        path: "{{ haproxy_socket_dir }}/admin.sock"
+        state: absent
 
     - name: Verificar si el API Server (VIP) responde en el puerto 6443
       wait_for:
