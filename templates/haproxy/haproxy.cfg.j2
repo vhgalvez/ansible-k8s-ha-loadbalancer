@@ -14,8 +14,8 @@ defaults
     mode    tcp
     option  tcplog
     timeout connect 10s
-    timeout client  1m
-    timeout server  1m
+    timeout client   1m
+    timeout server   1m
 
 frontend kubernetes_api
     bind *:6443
@@ -26,7 +26,7 @@ backend kubernetes_masters
     balance roundrobin
     option tcp-check
 {% for host in groups['masters'] %}
-    server master_{{ loop.index }} {{ hostvars[host].ansible_host }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
+    server master_{{ loop.index }} {{ hostvars[host].ansible_host }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}\n
 {% endfor %}
 
 listen stats
