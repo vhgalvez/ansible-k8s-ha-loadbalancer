@@ -29,6 +29,19 @@
           - keepalived
         state: present
 
+    - name: Asegurar que el grupo haproxy existe
+      group:
+        name: haproxy
+        state: present
+
+    - name: Asegurar que el usuario haproxy existe
+      user:
+        name: haproxy
+        group: haproxy
+        shell: /sbin/nologin
+        system: yes
+        create_home: no
+
     - name: Asegurar que el directorio de configuración de HAProxy existe
       file:
         path: "{{ haproxy_config_dir }}"
@@ -71,6 +84,12 @@
       file:
         path: /run/haproxy/admin.sock
         state: absent
+
+    - name: Validar configuración de HAProxy
+      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+      register: haproxy_check
+      failed_when: haproxy_check.rc != 0
+      changed_when: false
 
     - name: Habilitar y arrancar HAProxy y Keepalived
       systemd:
