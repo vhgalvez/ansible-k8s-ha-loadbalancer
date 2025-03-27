@@ -67,6 +67,11 @@
         group: haproxy
         mode: '0755'
 
+    - name: Eliminar socket anterior si existe
+      file:
+        path: /run/haproxy/admin.sock
+        state: absent
+
     - name: Habilitar y arrancar HAProxy y Keepalived
       systemd:
         name: "{{ item }}"
