@@ -25,9 +25,9 @@ backend kubernetes_masters
     mode tcp
     balance roundrobin
     option tcp-check
-{% for host in groups['masters'] %}
-    server node_{{ hostvars[host].inventory_hostname }} {{ hostvars[host].ansible_host }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
-{% endfor %}
+    {% for host in groups['masters'] %}
+    server {{ hostvars[host].inventory_hostname | regex_replace('[^a-zA-Z0-9]', '_') }} {{ hostvars[host].ansible_host }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
+    {% endfor %}
 
 listen stats
     bind *:8404
