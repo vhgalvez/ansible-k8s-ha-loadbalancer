@@ -41,6 +41,15 @@
         shell: /sbin/nologin
         system: yes
         create_home: no
+        state: present
+
+    - name: Obtener interfaz activa para Keepalived
+      command: ip route get 8.8.8.8
+      register: default_route
+
+    - name: Definir interfaz para Keepalived
+      set_fact:
+        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
 
     - name: Asegurar que el directorio de configuración de HAProxy existe
       file:
@@ -88,8 +97,26 @@
     - name: Validar configuración de HAProxy
       command: haproxy -c -f /etc/haproxy/haproxy.cfg
       register: haproxy_check
-      failed_when: haproxy_check.rc != 0
       changed_when: false
+      failed_when: haproxy_check.rc != 0
+
+    - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
+      command: setsebool -P haproxy_connect_any 1
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
+    - name: Establecer contexto SELinux para /run/haproxy (si aplica)
+      sefcontext:
+        target: '/run/haproxy(/.*)?'
+        setype: haproxy_var_run_t
+        state: present
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
+    - name: Restaurar contexto SELinux en /run/haproxy
+      command: restorecon -Rv /run/haproxy
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
 
     - name: Habilitar y arrancar HAProxy y Keepalived
       systemd:
@@ -97,8 +124,8 @@
         enabled: true
         state: restarted
       loop:
-        - haproxy
         - keepalived
+        - haproxy
 
   handlers:
     - name: Reiniciar HAProxy
