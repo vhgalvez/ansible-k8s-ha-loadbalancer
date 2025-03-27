@@ -11,12 +11,12 @@ vrrp_instance VI_1 {
 
     # Asignación de la IP Virtual (VIP)
     virtual_ipaddress {
-        10.17.5.10
+        10.17.5.10  # IP Virtual compartida entre los nodos maestros
     }
 
-    # En el nodo maestro 1 (VIP asignado)
+    # Monitorizar el servicio HAProxy
     track_script {
-        script "pidof haproxy" # Monitoriza si HAProxy está corriendo
+        script "pidof haproxy"  # Monitoriza si HAProxy está corriendo
         interval 2
     }
 }
@@ -26,7 +26,7 @@ vrrp_instance VI_2 {
     state BACKUP
     interface eth0
     virtual_router_id 51
-    priority 90  # Menor prioridad
+    priority 90  # Menor prioridad para el nodo de respaldo
     advert_int 1
     authentication {
         auth_type PASS
@@ -35,11 +35,11 @@ vrrp_instance VI_2 {
 
     # Asignación de la IP Virtual (VIP)
     virtual_ipaddress {
-        10.17.5.10
+        10.17.5.10  # IP Virtual compartida entre los nodos maestros
     }
 
     track_script {
-        script "pidof haproxy"
+        script "pidof haproxy"  # Monitoriza si HAProxy está corriendo
         interval 2
     }
 }
