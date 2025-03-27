@@ -22,18 +22,10 @@ frontend kubernetes_api
     default_backend kubernetes_masters
 
 backend kubernetes_masters
+    mode tcp
+    balance roundrobin
     option tcp-check
 {% for host in groups['masters'] %}
     server {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['ansible_host'] }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
 {% endfor %}
-
-# Sección opcional: estadísticas de HAProxy por interfaz web
-listen stats
-    bind *:8404
-    mode http
-    stats enable
-    stats uri /stats
-    stats refresh 10s
-    stats realm Haproxy\ Statistics
-    stats auth admin:admin123  # Cambia esta contraseña
 
