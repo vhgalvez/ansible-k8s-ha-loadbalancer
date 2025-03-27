@@ -2,7 +2,8 @@ global
     log /dev/log local0
     log /dev/log local1 notice
     chroot /var/lib/haproxy
-    stats socket /var/lib/haproxy/admin.sock mode 660 level admin
+    # Comentamos el socket admin para evitar errores de permisos
+    # stats socket /var/lib/haproxy/admin.sock mode 660 level admin
     stats timeout 30s
     user haproxy
     group haproxy
@@ -22,7 +23,7 @@ frontend kubernetes_api
     default_backend kubernetes_masters
 
 backend kubernetes_masters
-{% for host in groups['masters'] -%}
-    server {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['ansible_host'] }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}{{ '\n' -}}
+{% for host in groups['masters'] %}
+    server {{ hostvars[host]['inventory_hostname'] }} {{ hostvars[host]['ansible_host'] }}:6443 check{% if enable_api_check %} inter 3s fall 2 rise 2{% endif %}
 {% endfor %}
 
