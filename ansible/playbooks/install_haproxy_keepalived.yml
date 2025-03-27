@@ -9,6 +9,7 @@
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
 
   tasks:
+
     - name: Verificar si el API Server (VIP) responde en el puerto 6443
       wait_for:
         host: "{{ api_vip }}"
@@ -58,11 +59,19 @@
         mode: "0644"
       notify: Reiniciar Keepalived
 
+    - name: Asegurar que /run/haproxy existe y tiene permisos correctos
+      file:
+        path: /run/haproxy
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: '0755'
+
     - name: Habilitar y arrancar HAProxy y Keepalived
       systemd:
         name: "{{ item }}"
         enabled: true
-        state: started
+        state: restarted
       loop:
         - haproxy
         - keepalived
