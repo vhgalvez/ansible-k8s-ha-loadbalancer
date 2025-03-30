@@ -136,6 +136,7 @@
         state: started
         enabled: true
 
+    # Nueva tarea añadida para esperar que la IP VIP esté disponible en eth0
     - name: Esperar que la IP VIP esté disponible en eth0
       wait_for:
         host: "{{ api_vip }}"
