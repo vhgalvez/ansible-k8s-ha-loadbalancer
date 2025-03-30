@@ -1,4 +1,3 @@
----
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API Load Balancing
   hosts: haproxy_keepalived
   become: true
@@ -160,22 +159,18 @@
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    # Paso 22: Esperar la disponibilidad de la IP VIP y Reiniciar el servicio HAProxy y Keepalived
-    - name: Esperar que la IP VIP esté disponible en el puerto 6443 antes de reiniciar HAProxy
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        state: started
-        timeout: 30
-
-    - name: Reiniciar el servicio HAProxy y Keepalived
+    # Paso 22: Habilitar y arrancar Keepalived y HAProxy
+    - name: Habilitar y arrancar el servicio Keepalived
       systemd:
-        name: "{{ item }}"
-        state: restarted
+        name: keepalived
+        state: started
         enabled: true
-      loop:
-        - keepalived
-        - haproxy
+
+    - name: Habilitar y arrancar el servicio HAProxy
+      systemd:
+        name: haproxy
+        state: started
+        enabled: true
 
     # Paso 23: Abrir puerto 6443 en el firewall
     - name: Abrir puerto 6443 en el firewall
