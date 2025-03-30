@@ -10,24 +10,19 @@
     api_vip: "10.17.5.10"  # Asegúrate de tener esta variable configurada con la IP VIP
 
   tasks:
-    # Paso 1: Eliminar la IP estática de la interfaz eth0 si está configurada
-    - name: Eliminar IP estática de la interfaz eth0
-      command: ip addr del {{ api_vip }}/32 dev eth0
-      when: api_vip in ansible_default_ipv4.address
-
-    # Paso 2: Instalar net-tools para usar netstat
+    # Paso 1: Instalar net-tools para usar netstat
     - name: Instalar net-tools para usar netstat
       yum:
         name: net-tools
         state: present
 
-    # Paso 3: Asegurar que el grupo haproxy existe
+    # Paso 2: Asegurar que el grupo haproxy existe
     - name: Asegurar que el grupo haproxy existe
       group:
         name: haproxy
         state: present
 
-    # Paso 4: Asegurar que el usuario haproxy existe
+    # Paso 3: Asegurar que el usuario haproxy existe
     - name: Asegurar que el usuario haproxy existe
       user:
         name: haproxy
@@ -37,7 +32,7 @@
         create_home: no
         state: present
 
-    # Paso 5: Crear directorio para los sockets de HAProxy si no existe
+    # Paso 4: Crear directorio para los sockets de HAProxy si no existe
     - name: Crear {{ haproxy_socket_dir }} si no existe y aplicar permisos
       file:
         path: "{{ haproxy_socket_dir }}"
@@ -46,7 +41,7 @@
         group: haproxy
         mode: '0755'
 
-    # Paso 6: Establecer contexto SELinux para {{ haproxy_socket_dir }}
+    # Paso 5: Establecer contexto SELinux para {{ haproxy_socket_dir }}
     - name: Establecer contexto SELinux para {{ haproxy_socket_dir }}
       sefcontext:
         target: '{{ haproxy_socket_dir }}(/.*)?'
@@ -55,19 +50,19 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    # Paso 7: Restaurar contexto SELinux en {{ haproxy_socket_dir }}
+    # Paso 6: Restaurar contexto SELinux en {{ haproxy_socket_dir }}
     - name: Restaurar contexto SELinux en {{ haproxy_socket_dir }}
       command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    # Paso 8: Eliminar socket anterior si existe
+    # Paso 7: Eliminar socket anterior si existe
     - name: Eliminar socket anterior si existe
       file:
         path: "{{ haproxy_socket_dir }}/admin.sock"
         state: absent
 
-    # Paso 9: Verificar si el API Server (VIP) responde en el puerto 6443
+    # Paso 8: Verificar si el API Server (VIP) responde en el puerto 6443
     - name: Verificar si el API Server (VIP) responde en el puerto 6443
       wait_for:
         host: "{{ api_vip }}"
@@ -76,12 +71,12 @@
       register: api_server_status
       ignore_errors: yes
 
-    # Paso 10: Definir si se habilita 'check' en HAProxy
+    # Paso 9: Definir si se habilita 'check' en HAProxy
     - name: Definir si se habilita 'check' en HAProxy
       set_fact:
         enable_api_check: "{{ api_server_status is not failed }}"
 
-    # Paso 11: Instalar HAProxy y Keepalived
+    # Paso 10: Instalar HAProxy y Keepalived
     - name: Instalar HAProxy y Keepalived
       package:
         name:
@@ -89,24 +84,24 @@
           - keepalived
         state: present
 
-    # Paso 12: Obtener interfaz activa para Keepalived
+    # Paso 11: Obtener interfaz activa para Keepalived
     - name: Obtener interfaz activa para Keepalived
       command: ip route get 8.8.8.8
       register: default_route
 
-    # Paso 13: Definir interfaz para Keepalived
+    # Paso 12: Definir interfaz para Keepalived
     - name: Definir interfaz para Keepalived
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
 
-    # Paso 14: Asegurar que el directorio de configuración de HAProxy existe
+    # Paso 13: Asegurar que el directorio de configuración de HAProxy existe
     - name: Asegurar que el directorio de configuración de HAProxy existe
       file:
         path: "{{ haproxy_config_dir }}"
         state: directory
         mode: "0755"
 
-    # Paso 15: Copiar configuración de HAProxy
+    # Paso 14: Copiar configuración de HAProxy
     - name: Copiar configuración de HAProxy
       template:
         src: "{{ haproxy_config_template }}"
@@ -116,14 +111,14 @@
         mode: "0644"
       notify: Reiniciar HAProxy
 
-    # Paso 16: Asegurar que el directorio de configuración de Keepalived existe
+    # Paso 15: Asegurar que el directorio de configuración de Keepalived existe
     - name: Asegurar que el directorio de configuración de Keepalived existe
       file:
         path: "{{ keepalived_config_dir }}"
         state: directory
         mode: "0755"
 
-    # Paso 17: Copiar configuración de Keepalived
+    # Paso 16: Copiar configuración de Keepalived
     - name: Copiar configuración de Keepalived
       template:
         src: "{{ keepalived_config_template }}"
@@ -133,20 +128,20 @@
         mode: "0644"
       notify: Reiniciar Keepalived
 
-    # Paso 18: Validar configuración de HAProxy
+    # Paso 17: Validar configuración de HAProxy
     - name: Validar configuración de HAProxy
       command: haproxy -c -f /etc/haproxy/haproxy.cfg
       register: haproxy_check
       changed_when: false
       failed_when: haproxy_check.rc != 0
 
-    # Paso 19: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
+    # Paso 18: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
     - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
       command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    # Paso 20: Modificar archivo del servicio HAProxy para agregar Sleep=5
+    # Paso 19: Modificar archivo del servicio HAProxy para agregar Sleep=5
     - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
       lineinfile:
         path: /usr/lib/systemd/system/haproxy.service
@@ -155,11 +150,11 @@
         backrefs: yes
         insertbefore: '^ExecReload='
 
-    # Paso 21: Recargar configuración de systemd
+    # Paso 20: Recargar configuración de systemd
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    # Paso 22: Esperar que la IP VIP esté disponible en eth0
+    # Paso 21: Esperar que la IP VIP esté disponible en eth0
     - name: Esperar que la IP VIP esté disponible en eth0
       wait_for:
         host: "{{ api_vip }}"
@@ -167,21 +162,21 @@
         state: started
         timeout: 30
 
-    # Paso 23: Habilitar y arrancar el servicio Keepalived
+    # Paso 22: Habilitar y arrancar el servicio Keepalived
     - name: Habilitar y arrancar el servicio Keepalived
       systemd:
         name: keepalived
         state: started
         enabled: true
 
-    # Paso 24: Habilitar y arrancar el servicio HAProxy
+    # Paso 23: Habilitar y arrancar el servicio HAProxy
     - name: Habilitar y arrancar el servicio HAProxy
       systemd:
         name: haproxy
         state: started
         enabled: true
 
-    # Paso 25: Abrir puerto 6443 en el firewall
+    # Paso 24: Abrir puerto 6443 en el firewall
     - name: Abrir puerto 6443 en el firewall
       firewalld:
         port: 6443/tcp
