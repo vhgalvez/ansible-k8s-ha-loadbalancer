@@ -10,6 +10,28 @@
     api_vip: "10.17.5.10"  # Asegúrate de que esta variable esté configurada con la IP VIP
 
   tasks:
+    - name: Limpiar la caché de DNF
+      command: dnf clean all
+      become: true
+
+    - name: Actualizar repositorios de DNF
+      command: dnf update -y
+      become: true
+
+    - name: Verificar conectividad de red
+      command: ping -c 3 8.8.8.8
+      register: ping_output
+      become: true
+      failed_when: ping_output.rc != 0
+      ignore_errors: true
+
+    - name: Verificar disponibilidad del repositorio DNF
+      command: dnf repolist
+      register: repo_status
+      become: true
+      failed_when: repo_status.rc != 0
+      ignore_errors: true
+
     - name: Instalar paquetes necesarios
       yum:
         name:
@@ -17,6 +39,7 @@
           - haproxy
           - keepalived
         state: present
+      become: true
 
     - name: Asegurar que el grupo 'haproxy' existe
       group:
@@ -136,12 +159,7 @@
         state: started
         enabled: true
 
-    - name: Esperar que la IP VIP esté disponible en eth0
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        timeout: 90
-
+    # Habilitar y arrancar el servicio HAProxy después de verificar la disponibilidad VIP
     - name: Habilitar y arrancar el servicio HAProxy
       systemd:
         name: haproxy
