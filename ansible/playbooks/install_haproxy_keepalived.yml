@@ -1,3 +1,4 @@
+---
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API Load Balancing
   hosts: haproxy_keepalived
   become: true
@@ -13,7 +14,7 @@
     # Paso 1: Eliminar la IP estática de la interfaz eth0 si está configurada
     - name: Eliminar IP estática de la interfaz eth0
       command: ip addr del {{ api_vip }}/32 dev eth0
-      when: "'{{ api_vip }}' in ansible_default_ipv4.address"
+      when: api_vip in ansible_default_ipv4.address
 
     # Paso 2: Instalar net-tools para usar netstat
     - name: Instalar net-tools para usar netstat
