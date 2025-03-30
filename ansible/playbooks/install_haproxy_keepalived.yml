@@ -135,7 +135,7 @@
             state: present
 
         - name: Recargar la configuración de red
-          command: networkctl reload
+          command: systemctl restart NetworkManager
 
     - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
       lineinfile:
@@ -157,6 +157,13 @@
         - keepalived
         - haproxy
 
+    - name: Abrir puerto 6443 en el firewall
+      firewalld:
+        port: 6443/tcp
+        permanent: true
+        state: enabled
+      notify: Recargar firewall
+
   handlers:
     - name: Reiniciar HAProxy
       systemd:
@@ -167,3 +174,6 @@
       systemd:
         name: keepalived
         state: restarted
+
+    - name: Recargar firewall
+      command: firewall-cmd --reload
