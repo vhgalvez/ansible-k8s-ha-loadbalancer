@@ -124,11 +124,42 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Habilitar y arrancar HAProxy y Keepalived
+    - name: Modificar configuración de red para agregar la IP virtual (VIP)
+      block:
+        - name: Editar archivo de configuración de red para añadir la IP virtual
+          lineinfile:
+            path: /etc/systemd/network/10-static-en.network
+            line: |
+              [Match]
+              Name=eth0
+              
+              [Network]
+              Address=10.17.5.20/24
+              Address=10.17.5.10/32
+              Gateway=10.17.5.1
+              DNS=10.17.3.11
+              DNS=8.8.8.8
+            state: present
+
+        - name: Recargar la configuración de red
+          command: networkctl reload
+
+    - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
+      lineinfile:
+        path: /usr/lib/systemd/system/haproxy.service
+        regexp: '^ExecStart='
+        line: 'ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS'
+        backrefs: yes
+        insertbefore: '^ExecReload='
+
+    - name: Recargar configuración de systemd
+      command: systemctl daemon-reload
+
+    - name: Reiniciar el servicio HAProxy y Keepalived
       systemd:
         name: "{{ item }}"
-        enabled: true
         state: restarted
+        enabled: true
       loop:
         - keepalived
         - haproxy
