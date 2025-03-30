@@ -130,12 +130,6 @@
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    - name: Esperar que la IP VIP esté disponible en eth0
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        timeout: 30
-
     - name: Habilitar y arrancar el servicio Keepalived
       systemd:
         name: keepalived
