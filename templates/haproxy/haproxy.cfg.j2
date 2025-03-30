@@ -18,11 +18,13 @@ defaults
 frontend kubernetes_api
     bind {{ api_vip }}:6443
     mode tcp
+    option tcplog
     default_backend kubernetes_masters
 
 backend kubernetes_masters
     mode tcp
     balance roundrobin
+    option tcp-check
     {% for host in groups['masters'] %}
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
     {% endfor %}
@@ -31,6 +33,7 @@ backend kubernetes_masters
 frontend http_traffic
     bind *:80
     mode http
+    option httplog
     default_backend web_servers
 
 backend web_servers
@@ -45,6 +48,7 @@ backend web_servers
 frontend https_traffic
     bind *:443
     mode tcp
+    option tcplog
     default_backend web_servers_ssl
 
 backend web_servers_ssl
