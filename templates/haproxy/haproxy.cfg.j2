@@ -54,3 +54,5 @@ backend web_servers_ssl
     {% for host in groups['workers'] %}
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
+
+# FIN (agregar un salto de línea vacío aquí)
