@@ -64,4 +64,4 @@ sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_k
 > Proyecto independiente para usarse como prerequisito en arquitecturas como [FlatcarMicroCloud](https://github.com/vhgalvez/FlatcarMicroCloud)
 
 
-## 📜 Licencia este proyecto está licenciado bajo la **Licencia MIT** [text](LICENSE).
+## 📜 Licencia este proyecto está licenciado bajo la **Licencia MIT** [LICENSE](LICENSE).
