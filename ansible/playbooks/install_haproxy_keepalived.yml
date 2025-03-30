@@ -159,20 +159,29 @@
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    # Paso 22: Habilitar y arrancar Keepalived y HAProxy
+    # Paso 22: Esperar que la IP VIP esté disponible en eth0
+    - name: Esperar que la IP VIP esté disponible en eth0
+      wait_for:
+        host: "{{ api_vip }}"
+        port: 6443
+        state: started
+        timeout: 30
+
+    # Paso 23: Habilitar y arrancar el servicio Keepalived
     - name: Habilitar y arrancar el servicio Keepalived
       systemd:
         name: keepalived
         state: started
         enabled: true
 
+    # Paso 24: Habilitar y arrancar el servicio HAProxy
     - name: Habilitar y arrancar el servicio HAProxy
       systemd:
         name: haproxy
         state: started
         enabled: true
 
-    # Paso 23: Abrir puerto 6443 en el firewall
+    # Paso 25: Abrir puerto 6443 en el firewall
     - name: Abrir puerto 6443 en el firewall
       firewalld:
         port: 6443/tcp
