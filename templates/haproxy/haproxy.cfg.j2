@@ -1,12 +1,14 @@
+# Configuración Global
 global
     log stdout format raw local0
     maxconn 4096
     daemon
 
+# Configuración por defecto
 defaults
     log     global
-    mode    http
-    option  httplog
+    mode    tcp
+    option  tcplog
     option  dontlognull
     timeout connect 5s
     timeout client  50s
@@ -14,18 +16,18 @@ defaults
 
 # Balanceador para la API de Kubernetes
 frontend kubernetes_api
-    bind *:6443
+    bind {{ api_vip }}:6443
     mode tcp
     default_backend kubernetes_masters
 
 backend kubernetes_masters
     mode tcp
     balance roundrobin
-{% for host in groups['masters'] %}
+    {% for host in groups['masters'] %}
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
-{% endfor %}
+    {% endfor %}
 
-# Tráfico HTTP hacia Workers
+# Tráfico HTTP hacia los Workers
 frontend http_traffic
     bind *:80
     mode http
@@ -35,11 +37,11 @@ backend web_servers
     mode http
     balance roundrobin
     option httpchk GET /healthz
-{% for host in groups['workers'] %}
+    {% for host in groups['workers'] %}
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
-{% endfor %}
+    {% endfor %}
 
-# Tráfico HTTPS hacia Workers (con SSL passthrough)
+# Tráfico HTTPS hacia los Workers (con SSL passthrough)
 frontend https_traffic
     bind *:443
     mode tcp
@@ -49,6 +51,6 @@ backend web_servers_ssl
     mode tcp
     balance roundrobin
     option ssl-hello-chk
-{% for host in groups['workers'] %}
+    {% for host in groups['workers'] %}
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
-{% endfor %}
+    {% endfor %}
