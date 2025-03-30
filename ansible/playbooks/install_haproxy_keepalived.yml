@@ -159,7 +159,6 @@
       wait_for:
         host: "{{ api_vip }}"
         port: 6443
-        state: started
         timeout: 30
 
     # Paso 22: Habilitar y arrancar el servicio Keepalived
