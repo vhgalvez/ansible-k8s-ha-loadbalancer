@@ -125,18 +125,6 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Modificar configuración de red para agregar la IP virtual (VIP)
-      block:
-        - name: Asegurar que la IP virtual esté presente en el archivo de configuración de red
-          lineinfile:
-            path: /etc/systemd/network/10-static-en.network
-            line: "Address={{ api_vip }}/32"
-            insertafter: '^\[Network\]$'
-            state: present
-
-        - name: Recargar la configuración de red
-          command: systemctl restart NetworkManager
-
     - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
       lineinfile:
         path: /usr/lib/systemd/system/haproxy.service
