@@ -8,6 +8,7 @@
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
+    api_vip: "10.17.5.10"  # Asegúrate de tener esta variable configurada con la IP VIP
 
   tasks:
     - name: Instalar net-tools para usar netstat
@@ -126,19 +127,11 @@
 
     - name: Modificar configuración de red para agregar la IP virtual (VIP)
       block:
-        - name: Editar archivo de configuración de red para añadir la IP virtual
+        - name: Asegurar que la IP virtual esté presente en el archivo de configuración de red
           lineinfile:
             path: /etc/systemd/network/10-static-en.network
-            line: |
-              [Match]
-              Name=eth0
-              
-              [Network]
-              Address=10.17.5.20/24
-              Address=10.17.5.10/32
-              Gateway=10.17.5.1
-              DNS=10.17.3.11
-              DNS=8.8.8.8
+            line: "Address={{ api_vip }}/32"
+            insertafter: '^\[Network\]$'
             state: present
 
         - name: Recargar la configuración de red
