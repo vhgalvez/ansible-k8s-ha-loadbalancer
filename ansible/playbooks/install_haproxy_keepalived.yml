@@ -10,6 +10,12 @@
     haproxy_socket_dir: "/var/lib/haproxy"
 
   tasks:
+    - name: Instalar net-tools para usar netstat
+      become: yes
+      yum:
+        name: net-tools
+        state: present
+
     - name: Asegurar que el grupo haproxy existe
       group:
         name: haproxy
