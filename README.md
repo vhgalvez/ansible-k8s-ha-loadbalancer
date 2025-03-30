@@ -54,8 +54,11 @@ sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_k
 - El VIP estará disponible antes de desplegar K3s con TLS correcto.
 
 ---
+
+> Proyecto independiente para usarse como prerequisito en arquitecturas como [FlatcarMicroCloud](https://github.com/vhgalvez/FlatcarMicroCloud)
+
+
 ## 📸 Ansible HAproxy VIP OK
 
 ![Ansible HAproxy VIP](ansible_haproxy_vip.png)
 
-> Proyecto independiente para usarse como prerequisito en arquitecturas como [FlatcarMicroCloud](https://github.com/vhgalvez/FlatcarMicroCloud)
