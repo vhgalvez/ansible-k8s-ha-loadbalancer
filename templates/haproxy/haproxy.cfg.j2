@@ -16,7 +16,7 @@ defaults
 
 # Balanceador para la API de Kubernetes
 frontend kubernetes_api
-    bind {{ api_vip }}:6443
+    bind eth0:{{ api_vip }}:6443
     mode tcp
     default_backend kubernetes_masters
 
@@ -56,3 +56,4 @@ backend web_servers_ssl
     {% endfor %}
 
 # FIN
+
