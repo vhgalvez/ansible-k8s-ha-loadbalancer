@@ -12,23 +12,19 @@
   tasks:
     - name: Limpiar la caché de DNF
       command: dnf clean all
-      become: true
 
     - name: Actualizar repositorios de DNF
       command: dnf update -y
-      become: true
 
     - name: Verificar conectividad de red
       command: ping -c 3 8.8.8.8
       register: ping_output
-      become: true
       failed_when: ping_output.rc != 0
       ignore_errors: true
 
     - name: Verificar disponibilidad del repositorio DNF
       command: dnf repolist
       register: repo_status
-      become: true
       failed_when: repo_status.rc != 0
       ignore_errors: true
 
@@ -39,7 +35,6 @@
           - haproxy
           - keepalived
         state: present
-      become: true
 
     - name: Asegurar que el grupo 'haproxy' existe
       group:
@@ -147,34 +142,11 @@
         state: started
         enabled: true
 
-    - name: Reiniciar el servicio HAProxy
-      systemd:
-        name: haproxy
-        state: restarted
-        enabled: true
-
     - name: Habilitar y arrancar HAProxy
       systemd:
         name: haproxy
         state: started
         enabled: true
-
-    - name: Reejecutar systemd si el servicio fue modificado
-      command: systemctl daemon-reexec
-      when: ansible_facts['distribution'] == "CentOS" or ansible_facts['distribution'] == "RedHat"
-      ignore_errors: true
-
-    - name: Verificar que HAProxy esté activo y habilitado
-      shell: |
-        systemctl is-enabled haproxy && systemctl is-active haproxy
-      register: haproxy_status
-      changed_when: false
-
-    - name: Esperar que la IP VIP esté disponible en eth0
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        timeout: 90
 
     - name: Abrir puerto 6443 en el firewall
       firewalld:
@@ -182,6 +154,11 @@
         permanent: true
         state: enabled
       notify: Recargar firewall
+
+    - name: Reiniciar HAProxy para aplicar todos los cambios
+      systemd:
+        name: haproxy
+        state: restarted
 
   handlers:
     - name: Reiniciar HAProxy
