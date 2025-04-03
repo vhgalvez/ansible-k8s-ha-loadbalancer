@@ -136,17 +136,17 @@
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    - name: Habilitar y arrancar Keepalived
+    - name: Habilitar Keepalived
       systemd:
         name: keepalived
-        state: started
         enabled: true
+        state: started
 
-    - name: Habilitar y arrancar HAProxy
+    - name: Habilitar HAProxy sin arrancar (esperaremos a que la VIP esté activa)
       systemd:
         name: haproxy
-        state: started
         enabled: true
+        state: stopped
 
     - name: Abrir puerto 6443 en el firewall
       firewalld:
@@ -172,7 +172,6 @@
       systemd:
         name: haproxy
         state: restarted
-    
 
   handlers:
     - name: Reiniciar HAProxy
