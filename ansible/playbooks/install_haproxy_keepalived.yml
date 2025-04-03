@@ -50,7 +50,7 @@
         create_home: no
         state: present
 
-    - name: Crear directorio para los sockets de HAProxy si no existe y aplicar permisos
+    - name: Crear directorio para los sockets de HAProxy
       file:
         path: "{{ haproxy_socket_dir }}"
         state: directory
@@ -58,7 +58,7 @@
         group: haproxy
         mode: '0755'
 
-    - name: Establecer contexto SELinux para {{ haproxy_socket_dir }}
+    - name: Establecer contexto SELinux para socket de HAProxy
       sefcontext:
         target: '{{ haproxy_socket_dir }}(/.*)?'
         setype: var_run_t
@@ -66,12 +66,12 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Restaurar contexto SELinux en {{ haproxy_socket_dir }}
+    - name: Restaurar contexto SELinux en socket de HAProxy
       command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Eliminar socket anterior de HAProxy si existe
+    - name: Eliminar socket anterior si existe
       file:
         path: "{{ haproxy_socket_dir }}/admin.sock"
         state: absent
@@ -120,7 +120,7 @@
       changed_when: false
       failed_when: haproxy_check.rc != 0
 
-    - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux (si aplica)
+    - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux
       command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
@@ -136,7 +136,7 @@
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
 
-    - name: Habilitar y arrancar el servicio Keepalived
+    - name: Habilitar y arrancar Keepalived
       systemd:
         name: keepalived
         state: started
@@ -155,10 +155,23 @@
         state: enabled
       notify: Recargar firewall
 
-    - name: Reiniciar HAProxy para aplicar todos los cambios
+    - name: Esperar unos segundos para asegurar que Keepalived asignó la VIP
+      pause:
+        seconds: 5
+
+    - name: Reiniciar HAProxy (segunda vez para asegurar el bind con VIP)
       systemd:
         name: haproxy
         state: restarted
+
+    - name: Mostrar interfaces de red para verificar si la IP VIP está activa
+      command: ip a
+      register: ip_output
+      changed_when: false
+
+    - name: Mostrar salida de ip a (busca manualmente la VIP {{ api_vip }})
+      debug:
+        msg: "{{ ip_output.stdout }}"
 
   handlers:
     - name: Reiniciar HAProxy
