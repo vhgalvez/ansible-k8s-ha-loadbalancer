@@ -81,18 +81,6 @@
         path: "{{ haproxy_socket_dir }}/admin.sock"
         state: absent
 
-    - name: Verificar si el API Server (VIP) responde en el puerto 6443
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        timeout: 90
-      register: api_server_status
-      ignore_errors: yes
-
-    - name: Definir si se habilita 'check' en HAProxy
-      set_fact:
-        enable_api_check: "{{ api_server_status is not failed }}"
-
     - name: Obtener interfaz activa para Keepalived
       command: ip route get 8.8.8.8
       register: default_route
@@ -159,12 +147,6 @@
         state: started
         enabled: true
 
-    - name: Esperar que la IP VIP esté disponible en eth0
-      wait_for:
-        host: "{{ api_vip }}"
-        port: 6443
-        timeout: 90
-
     - name: Reiniciar el servicio HAProxy
       systemd:
         name: haproxy
@@ -187,6 +169,12 @@
         systemctl is-enabled haproxy && systemctl is-active haproxy
       register: haproxy_status
       changed_when: false
+
+    - name: Esperar que la IP VIP esté disponible en eth0
+      wait_for:
+        host: "{{ api_vip }}"
+        port: 6443
+        timeout: 90
 
     - name: Abrir puerto 6443 en el firewall
       firewalld:
