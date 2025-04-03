@@ -159,11 +159,6 @@
       pause:
         seconds: 5
 
-    - name: Reiniciar HAProxy (segunda vez para asegurar el bind con VIP)
-      systemd:
-        name: haproxy
-        state: restarted
-
     - name: Mostrar interfaces de red para verificar si la IP VIP está activa
       command: ip a
       register: ip_output
@@ -172,6 +167,11 @@
     - name: Mostrar salida de ip a (busca manualmente la VIP {{ api_vip }})
       debug:
         msg: "{{ ip_output.stdout }}"
+
+    - name: Reiniciar HAProxy final (con VIP ya activa)
+      systemd:
+        name: haproxy
+        state: restarted
 
   handlers:
     - name: Reiniciar HAProxy
