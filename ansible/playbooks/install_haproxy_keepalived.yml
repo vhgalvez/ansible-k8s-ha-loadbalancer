@@ -7,7 +7,7 @@
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
-    api_vip: "10.17.5.10"  # Asegúrate de que esta variable esté configurada con la IP VIP
+    api_vip: "10.17.5.10"
 
   tasks:
     - name: Limpiar la caché de DNF
@@ -170,6 +170,23 @@
         name: haproxy
         state: restarted
         enabled: true
+
+    - name: Habilitar y arrancar HAProxy
+      systemd:
+        name: haproxy
+        state: started
+        enabled: true
+
+    - name: Reejecutar systemd si el servicio fue modificado
+      command: systemctl daemon-reexec
+      when: ansible_facts['distribution'] == "CentOS" or ansible_facts['distribution'] == "RedHat"
+      ignore_errors: true
+
+    - name: Verificar que HAProxy esté activo y habilitado
+      shell: |
+        systemctl is-enabled haproxy && systemctl is-active haproxy
+      register: haproxy_status
+      changed_when: false
 
     - name: Abrir puerto 6443 en el firewall
       firewalld:
