@@ -142,10 +142,10 @@
         state: started
         enabled: true
 
-    - name: Habilitar y arrancar HAProxy
+    - name: Habilitar HAProxy
       systemd:
         name: haproxy
-        state: started
+        state: enabled
         enabled: true
 
     - name: Abrir puerto 6443 en el firewall
@@ -172,6 +172,7 @@
       systemd:
         name: haproxy
         state: restarted
+    
 
   handlers:
     - name: Reiniciar HAProxy
