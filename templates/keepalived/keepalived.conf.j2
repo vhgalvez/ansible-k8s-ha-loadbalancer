@@ -1,6 +1,6 @@
 vrrp_instance VI_1 {
     state MASTER
-    interface eth0
+    interface br0 # Adactador puente de la red Bridge
     virtual_router_id 51
     priority 100  # Prioridad más alta para el nodo principal
     advert_int 1  # Intervalo de anuncios VRRP
@@ -10,7 +10,7 @@ vrrp_instance VI_1 {
     }
 
     virtual_ipaddress {
-        10.17.5.10  # IP Virtual compartida entre los nodos maestros
+        192.168.0.55  # IP Virtual compartida entre los nodos maestros
     }
 
     track_script {
@@ -22,7 +22,7 @@ vrrp_instance VI_1 {
 # Configuración para el nodo de respaldo (para otros Load Balancers)
 vrrp_instance VI_2 {
     state BACKUP
-    interface eth0
+    interface br0 # Adactador puente de la red Bridge
     virtual_router_id 52  # Cambiar VRID para evitar duplicados
     priority 90  # Menor prioridad para el nodo de respaldo
     advert_int 1
@@ -32,7 +32,7 @@ vrrp_instance VI_2 {
     }
 
     virtual_ipaddress {
-        10.17.5.10  # IP Virtual compartida entre los nodos maestros
+        192.168.0.55  # IP Virtual compartida entre los nodos maestros
     }
 
     track_script {

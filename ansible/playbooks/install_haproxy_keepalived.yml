@@ -1,3 +1,4 @@
+# ansible\playbooks\install_haproxy_keepalived.yml
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API Load Balancing
   hosts: haproxy_keepalived
   become: true
@@ -7,7 +8,7 @@
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
-    api_vip: "10.17.5.10"
+    api_vip: "192.168.0.55"
 
   tasks:
     - name: Limpiar la caché de DNF
