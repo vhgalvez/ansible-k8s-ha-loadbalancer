@@ -57,11 +57,11 @@
         state: directory
         owner: haproxy
         group: haproxy
-        mode: '0755'
+        mode: "0755"
 
     - name: Establecer contexto SELinux para socket de HAProxy
       sefcontext:
-        target: '{{ haproxy_socket_dir }}(/.*)?'
+        target: "{{ haproxy_socket_dir }}(/.*)?"
         setype: var_run_t
         state: present
       when: ansible_selinux.status == "enabled"
@@ -129,10 +129,10 @@
     - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
       lineinfile:
         path: /usr/lib/systemd/system/haproxy.service
-        regexp: '^ExecStart='
-        line: 'ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS'
+        regexp: "^ExecStart="
+        line: "ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS"
         backrefs: yes
-        insertbefore: '^ExecReload='
+        insertbefore: "^ExecReload="
 
     - name: Recargar configuración de systemd
       command: systemctl daemon-reload
@@ -149,12 +149,17 @@
         enabled: true
         state: stopped
 
-    - name: Abrir puerto 6443 en el firewall
-      firewalld:
-        port: 6443/tcp
-        permanent: true
-        state: enabled
-      notify: Recargar firewall
+    - name: Abrir puerto 6443/tcp con firewall-cmd en runtime
+      shell: firewall-cmd --add-port=6443/tcp
+      register: add_port_runtime
+      failed_when: add_port_runtime.rc != 0
+      changed_when: "'success' in add_port_runtime.stdout"
+
+    - name: Hacer permanente el puerto 6443/tcp con firewall-cmd
+      shell: firewall-cmd --permanent --add-port=6443/tcp
+      register: add_port_permanent
+      failed_when: add_port_permanent.rc != 0
+      changed_when: "'success' in add_port_permanent.stdout"
 
     - name: Esperar unos segundos para asegurar que Keepalived asignó la VIP
       pause:
