@@ -8,7 +8,7 @@
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
-    api_vip: "192.168.0.55"
+    api_vip: "10.17.5.10"
 
   tasks:
     - name: Limpiar la caché de DNF
