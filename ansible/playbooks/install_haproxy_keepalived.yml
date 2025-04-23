@@ -149,18 +149,6 @@
         enabled: true
         state: stopped
 
-    - name: Abrir puerto 6443/tcp con firewall-cmd en runtime
-      shell: firewall-cmd --add-port=6443/tcp
-      register: add_port_runtime
-      failed_when: add_port_runtime.rc != 0
-      changed_when: "'success' in add_port_runtime.stdout"
-
-    - name: Hacer permanente el puerto 6443/tcp con firewall-cmd
-      shell: firewall-cmd --permanent --add-port=6443/tcp
-      register: add_port_permanent
-      failed_when: add_port_permanent.rc != 0
-      changed_when: "'success' in add_port_permanent.stdout"
-
     - name: Esperar unos segundos para asegurar que Keepalived asignó la VIP
       pause:
         seconds: 5
@@ -189,6 +177,3 @@
       systemd:
         name: keepalived
         state: restarted
-
-    - name: Recargar firewall
-      command: firewall-cmd --reload
