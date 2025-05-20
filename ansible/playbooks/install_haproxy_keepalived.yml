@@ -1,5 +1,5 @@
 # ansible\playbooks\install_haproxy_keepalived.yml
-- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API Load Balancing
+- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
   vars:
@@ -12,25 +12,26 @@
     second_vip: "10.17.5.30"
 
   tasks:
+
     - name: Limpiar la caché de DNF
       command: dnf clean all
 
-    - name: Actualizar repositorios de DNF
+    - name: Actualizar paquetes del sistema
       command: dnf update -y
 
-    - name: Verificar conectividad de red
+    - name: Verificar conectividad a internet
       command: ping -c 3 8.8.8.8
       register: ping_output
       failed_when: ping_output.rc != 0
       ignore_errors: true
 
-    - name: Verificar disponibilidad del repositorio DNF
+    - name: Verificar disponibilidad de repositorios
       command: dnf repolist
       register: repo_status
       failed_when: repo_status.rc != 0
       ignore_errors: true
 
-    - name: Instalar paquetes necesarios
+    - name: Instalar paquetes requeridos
       yum:
         name:
           - net-tools
@@ -38,12 +39,12 @@
           - keepalived
         state: present
 
-    - name: Asegurar que el grupo 'haproxy' existe
+    - name: Crear grupo haproxy si no existe
       group:
         name: haproxy
         state: present
 
-    - name: Asegurar que el usuario 'haproxy' existe
+    - name: Crear usuario haproxy si no existe
       user:
         name: haproxy
         group: haproxy
@@ -52,7 +53,7 @@
         create_home: no
         state: present
 
-    - name: Crear directorio para los sockets de HAProxy
+    - name: Crear directorio para el socket de HAProxy
       file:
         path: "{{ haproxy_socket_dir }}"
         state: directory
@@ -60,7 +61,7 @@
         group: haproxy
         mode: "0755"
 
-    - name: Establecer contexto SELinux para socket de HAProxy
+    - name: Establecer contexto SELinux para socket (si aplica)
       sefcontext:
         target: "{{ haproxy_socket_dir }}(/.*)?"
         setype: var_run_t
@@ -68,17 +69,17 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Restaurar contexto SELinux en socket de HAProxy
+    - name: Restaurar contexto SELinux (si aplica)
       command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Eliminar socket anterior si existe
+    - name: Eliminar socket anterior de HAProxy
       file:
         path: "{{ haproxy_socket_dir }}/admin.sock"
         state: absent
 
-    - name: Obtener interfaz activa para Keepalived
+    - name: Detectar interfaz activa para Keepalived
       command: ip route get 8.8.8.8
       register: default_route
 
@@ -86,13 +87,13 @@
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
 
-    - name: Asegurar que el directorio de configuración de HAProxy existe
+    - name: Crear directorio de configuración de HAProxy
       file:
         path: "{{ haproxy_config_dir }}"
         state: directory
         mode: "0755"
 
-    - name: Copiar configuración de HAProxy
+    - name: Plantilla de configuración de HAProxy
       template:
         src: "{{ haproxy_config_template }}"
         dest: "{{ haproxy_config_dir }}/haproxy.cfg"
@@ -101,13 +102,13 @@
         mode: "0644"
       notify: Reiniciar HAProxy
 
-    - name: Asegurar que el directorio de configuración de Keepalived existe
+    - name: Crear directorio de configuración de Keepalived
       file:
         path: "{{ keepalived_config_dir }}"
         state: directory
         mode: "0755"
 
-    - name: Copiar configuración de Keepalived
+    - name: Plantilla de configuración de Keepalived
       template:
         src: "{{ keepalived_config_template }}"
         dest: "{{ keepalived_config_dir }}/keepalived.conf"
@@ -117,53 +118,52 @@
       notify: Reiniciar Keepalived
 
     - name: Validar configuración de HAProxy
-      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+      command: haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg
       register: haproxy_check
       changed_when: false
       failed_when: haproxy_check.rc != 0
 
-    - name: Permitir a HAProxy usar cualquier puerto TCP con SELinux
+    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
       command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Modificar archivo del servicio HAProxy para agregar Sleep=5
+    - name: Ajustar línea de ejecución de HAProxy con Sleep opcional
       lineinfile:
         path: /usr/lib/systemd/system/haproxy.service
-        regexp: "^ExecStart="
-        line: "ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS"
+        regexp: '^ExecStart='
+        line: 'ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS'
         backrefs: yes
-        insertbefore: "^ExecReload="
 
-    - name: Recargar configuración de systemd
-      command: systemctl daemon-reload
+    - name: Recargar systemd
+      command: systemctl daemon-reexec
 
-    - name: Habilitar Keepalived
+    - name: Habilitar y arrancar Keepalived
       systemd:
         name: keepalived
         enabled: true
         state: started
 
-    - name: Habilitar HAProxy sin arrancar (esperaremos a que la VIP esté activa)
+    - name: Habilitar HAProxy sin iniciarlo aún
       systemd:
         name: haproxy
         enabled: true
         state: stopped
 
-    - name: Esperar unos segundos para asegurar que Keepalived asignó la VIP
+    - name: Esperar a que las VIPs estén activas
       pause:
         seconds: 5
 
-    - name: Mostrar interfaces de red para verificar si la IP VIP está activa
+    - name: Mostrar estado de interfaces de red y VIPs
       command: ip a
       register: ip_output
       changed_when: false
 
-    - name: Mostrar salida de ip a (busca manualmente la VIP {{ api_vip }})
+    - name: Debug - Verifica presencia de las VIPs configuradas
       debug:
-        msg: "{{ ip_output.stdout }}"
+        msg: "{{ ip_output.stdout_lines | select('search', api_vip) | list + ip_output.stdout_lines | select('search', second_vip) | list }}"
 
-    - name: Reiniciar HAProxy final (con VIP ya activa)
+    - name: Iniciar HAProxy (una vez VIP activa)
       systemd:
         name: haproxy
         state: restarted
