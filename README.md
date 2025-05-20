@@ -1,67 +1,159 @@
 # 🧰 HAProxy + Keepalived Deployment (Ansible)
 
-Este repositorio despliega un balanceador de carga con alta disponibilidad usando **HAProxy** y **Keepalived** para clústeres Kubernetes (K3s o K8s tradicionales).
+Este repositorio despliega un balanceador de carga con alta disponibilidad usando **HAProxy** y **Keepalived** para clústeres Kubernetes (K3s o Kubernetes tradicionales). Proporciona balanceo de tráfico en las capas TCP/HTTP y maneja múltiples VIPs para separar tráfico del API y del Ingress.
 
 ---
 
-## 🚀 Requisitos
+## 🧱 Visión General: ¿Qué estás construyendo?
 
-- Servidores con AlmaLinux, Rocky Linux, CentOS o similares
-- Ansible instalado en el nodo de control
-- Acceso SSH sin contraseña a los nodos
-- IP virtual (VIP) predefinida para el clúster
+Estás construyendo un entorno Kubernetes de alta disponibilidad sobre máquinas virtuales KVM en un servidor físico HP ProLiant, utilizando K3s, HAProxy + Keepalived, Traefik como Ingress interno, y almacenamiento distribuido con Longhorn + NFS, todo asegurado mediante VPN WireGuard y nftables.
 
 ---
 
-## 📁 Inventario de ejemplo (`inventory/hosts.ini`)
+## 🌐 Arquitectura de Red y Accesos Externos
 
-```ini
-[haproxy_keepalived]
-10.17.5.10 ansible_user=core ansible_ssh_private_key_file=~/.ssh/id_rsa_key_cluster_openshift ansible_port=22 ansible_shell_executable=/bin/sh
-
-[masters]
-10.17.4.21
-10.17.4.22
-10.17.4.23
-
-[workers]
-10.17.4.24
-10.17.4.25
-10.17.4.26
+```
+[Usuarios Públicos]
+       │
+       ▼
++-------------------+
+| Cloudflare CDN    | ◄── Proxy + HTTPS + WAF
+| (example.com)     |
++-------------------+
+       │
+       ▼
++----------------------------+
+| VPS con IP pública         |
+| WireGuard Gateway          |
+| Túnel: 10.17.0.1           |
++----------------------------+
+       │
+       ▼
++-----------------------------+
+| WireGuard Server LAN       |
+| NAT + VPN (192.168.0.19)   |
++-----------------------------+
+       │
+       ▼
+Tráfico Interno Redirigido Según Tipo
 ```
 
----
+### 🎯 Separación de Tráfico en Producción
 
-## 📦 Ejecución
+| Tipo de Tráfico       | VIP Asignada | Función                                                |
+| --------------------- | ------------ | ------------------------------------------------------ |
+| Kubernetes API (6443) | 10.17.5.10   | Requiere estabilidad para kubectl, etcd, control-plane |
+| Ingress HTTP/HTTPS    | 10.17.5.30   | Redirige tráfico a servicios internos vía Traefik      |
 
-```bash
-sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_keepalived.yml
-```
+Estas IPs virtuales (VIP) son gestionadas por HAProxy + Keepalived y conmutan entre nodos automáticamente.
 
----
+### 🧠 Balanceadores HA
 
-## 📜 Archivos de plantilla
+| Nodo          | IP         | Función                |
+| ------------- | ---------- | ---------------------- |
+| k8s-api-lb    | 10.17.5.20 | Nodo principal de VIPs |
+| loadbalancer1 | 10.17.3.12 | Respaldo HAProxy       |
+| loadbalancer2 | 10.17.3.13 | Respaldo HAProxy       |
 
-- `templates/haproxy/haproxy.cfg.j2`: configuración del balanceo de carga para API (6443), HTTP (80) y HTTPS (443)
-- `templates/keepalived/keepalived.conf.j2`: define la IP virtual (VIP) compartida entre los nodos
+Los tres tienen HAProxy + Keepalived instalados.
 
----
-
-## ✅ Resultado esperado
-
-- El servicio `haproxy` estará escuchando en los puertos 6443, 80 y 443.
-- El servicio `keepalived` gestionará la IP virtual compartida.
-- El VIP estará disponible antes de desplegar K3s con TLS correcto.
-
-
-## 📸 Ansible HAproxy VIP OK
-
-![Ansible HAproxy VIP](ansible_haproxy_vip.png)
+Las VIPs 10.17.5.10 (API) y 10.17.5.30 (Ingress) son flotantes. Solo un nodo las mantiene activas al mismo tiempo (por prioridad).
 
 ---
 
+## ☸️ Clúster Kubernetes (K3s HA)
 
-> Proyecto independiente para usarse como prerequisito en arquitecturas como [FlatcarMicroCloud](https://github.com/vhgalvez/FlatcarMicroCloud)
+| Hostname | IP         | Rol                  |
+| -------- | ---------- | -------------------- |
+| master1  | 10.17.4.21 | etcd + API           |
+| master2  | 10.17.4.22 | etcd                 |
+| master3  | 10.17.4.23 | etcd                 |
+| worker1  | 10.17.4.24 | Nodo de aplicaciones |
+| worker2  | 10.17.4.25 | Nodo de aplicaciones |
+| worker3  | 10.17.4.26 | Nodo de aplicaciones |
 
+Todos los nodos usan Flatcar Container Linux. Clúster K3s en modo etcd HA.
 
-## 📜 Licencia este proyecto está licenciado bajo la **Licencia MIT** [LICENSE](LICENSE).
+Se instala con `--tls-san 10.17.5.10` para que `kubectl` acceda vía la VIP.
+
+---
+
+## 🚪 Ingress Controller (Traefik)
+
+| Tipo    | Despliegue                       |
+| ------- | -------------------------------- |
+| Traefik | Deployment interno en Kubernetes |
+
+El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se comunica con los pods vía ClusterIP. No se expone directamente.
+
+---
+
+## 💾 Almacenamiento Persistente
+
+| Nodo     | IP         | Rol            |
+| -------- | ---------- | -------------- |
+| storage1 | 10.17.4.27 | NFS + Longhorn |
+
+**Longhorn (RWO):**
+
+* Microservicios
+* Prometheus
+* Grafana
+* ELK
+
+**NFS (RWX):**
+
+* PostgreSQL → `/srv/nfs/postgresql`
+* Datos compartidos → `/srv/nfs/shared`
+
+---
+
+## 🔐 Seguridad
+
+| Componente    | Detalles                                |
+| ------------- | --------------------------------------- |
+| WireGuard     | Acceso remoto seguro desde el VPS       |
+| nftables      | Firewall estricto en el servidor físico |
+| Cloudflare    | HTTPS, WAF, Protección contra DDoS      |
+| Autenticación | basicAuth en dashboards internos        |
+| DNS/NTP       | infra-cluster (`10.17.3.11`)            |
+
+---
+
+## 🧠 Automatización y CI/CD
+
+| Herramienta      | Función                                |
+| ---------------- | -------------------------------------- |
+| Terraform        | Provisión de VMs y redes               |
+| Ansible          | Instalación y configuración (100% IaC) |
+| Jenkins + ArgoCD | CI/CD interno                          |
+
+---
+
+## 🖥 Tabla de Máquinas
+
+| Hostname      | IP         | Función                     |
+| ------------- | ---------- | --------------------------- |
+| master1       | 10.17.4.21 | K3s Master + etcd           |
+| master2       | 10.17.4.22 | K3s Master + etcd           |
+| master3       | 10.17.4.23 | K3s Master + etcd           |
+| worker1       | 10.17.4.24 | Nodo de aplicaciones        |
+| worker2       | 10.17.4.25 | Nodo de aplicaciones        |
+| worker3       | 10.17.4.26 | Nodo de aplicaciones        |
+| storage1      | 10.17.4.27 | Longhorn + NFS              |
+| k8s-api-lb    | 10.17.5.20 | HAProxy + Keepalived (VIPs) |
+| loadbalancer1 | 10.17.3.12 | HAProxy (respaldo)          |
+| loadbalancer2 | 10.17.3.13 | HAProxy (respaldo)          |
+| postgresql1   | 10.17.3.14 | PostgreSQL centralizado     |
+| infra-cluster | 10.17.3.11 | CoreDNS + Chrony            |
+
+---
+
+## ✅ Ventajas de esta Arquitectura
+
+* 🔁 Alta disponibilidad real con múltiples VIPs separadas.
+* 🚪 Ingress controlado internamente con Traefik.
+* 🛡️ Seguridad robusta por VPN, nftables y HTTPS.
+* 🧰 Automatización total (Terraform + Ansible).
+* 📦 Almacenamiento distribuido y tolerante a fallos.
+* 🧱 Modularidad para crecer sin rediseñar.

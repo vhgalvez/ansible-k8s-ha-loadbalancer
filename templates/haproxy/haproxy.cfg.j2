@@ -1,20 +1,27 @@
+# --------------------
 # Configuración Global
+# --------------------
 global
     log stdout format raw local0
     maxconn 4096
     daemon
+    stats socket {{ haproxy_socket_dir }}/admin.sock mode 600 level admin
 
-# Configuración por defecto
+# --------------------
+# Valores por defecto
+# --------------------
 defaults
     log     global
     mode    tcp
-    option  tcplog
     option  dontlognull
     timeout connect 5s
     timeout client  50s
     timeout server  50s
 
-# Balanceador para la API de Kubernetes
+# -------------------------------
+# Frontend para Kubernetes API
+# VIP: {{ api_vip }}:6443
+# -------------------------------
 frontend kubernetes_api
     bind {{ api_vip }}:6443
     mode tcp
@@ -29,14 +36,17 @@ backend kubernetes_masters
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
     {% endfor %}
 
-# Tráfico HTTP hacia los Workers
-frontend http_traffic
-    bind *:80
+# -----------------------------------------------------
+# Frontend HTTP (Ingress)
+# VIP: {{ second_vip }}:80
+# -----------------------------------------------------
+frontend http_ingress
+    bind {{ second_vip }}:80
     mode http
     option httplog
-    default_backend web_servers
+    default_backend ingress_http_servers
 
-backend web_servers
+backend ingress_http_servers
     mode http
     balance roundrobin
     option httpchk GET /healthz
@@ -44,14 +54,17 @@ backend web_servers
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
     {% endfor %}
 
-# Tráfico HTTPS hacia los Workers (con SSL passthrough)
-frontend https_traffic
-    bind *:443
+# -----------------------------------------------------
+# Frontend HTTPS (Ingress SSL Passthrough)
+# VIP: {{ second_vip }}:443
+# -----------------------------------------------------
+frontend https_ingress
+    bind {{ second_vip }}:443
     mode tcp
     option tcplog
-    default_backend web_servers_ssl
+    default_backend ingress_https_servers
 
-backend web_servers_ssl
+backend ingress_https_servers
     mode tcp
     balance roundrobin
     option ssl-hello-chk
@@ -59,5 +72,6 @@ backend web_servers_ssl
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
 
-# FIN
-
+# --------------------
+# FIN DE CONFIGURACIÓN
+# --------------------
