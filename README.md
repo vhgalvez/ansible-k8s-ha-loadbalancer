@@ -160,14 +160,14 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 
 
 
-ansible-haproxy-keepalived-balaceadores/
+ansible-k8s-ha-loadbalancer/
 ├── ansible.cfg
 ├── inventory/
 │   └── hosts.ini
 ├── host_vars/
-│   ├── 10.17.3.12.yml   # loadbalancer1
-│   ├── 10.17.3.13.yml   # loadbalancer2
-│   └── 10.17.5.20.yml   # k8s-api-lb (activo principal)
+│   ├── 10.17.3.12.yml        # loadbalancer1
+│   ├── 10.17.3.13.yml        # loadbalancer2
+│   └── 10.17.5.20.yml        # k8s-api-lb (nodo principal)
 ├── playbooks/
 │   └── install_haproxy_keepalived.yml
 ├── templates/
@@ -176,3 +176,4 @@ ansible-haproxy-keepalived-balaceadores/
 │   └── keepalived/
 │       └── keepalived.conf.j2
 ├── Makefile
+└── README.md
