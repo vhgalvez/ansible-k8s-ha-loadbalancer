@@ -157,3 +157,22 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 * 🧰 Automatización total (Terraform + Ansible).
 * 📦 Almacenamiento distribuido y tolerante a fallos.
 * 🧱 Modularidad para crecer sin rediseñar.
+
+
+
+ansible-haproxy-keepalived-balaceadores/
+├── ansible.cfg
+├── inventory/
+│   └── hosts.ini
+├── host_vars/
+│   ├── 10.17.3.12.yml   # loadbalancer1
+│   ├── 10.17.3.13.yml   # loadbalancer2
+│   └── 10.17.5.20.yml   # k8s-api-lb (activo principal)
+├── playbooks/
+│   └── install_haproxy_keepalived.yml
+├── templates/
+│   ├── haproxy/
+│   │   └── haproxy.cfg.j2
+│   └── keepalived/
+│       └── keepalived.conf.j2
+├── Makefile
