@@ -1,0 +1,83 @@
+- name: Desinstalar completamente HAProxy + Keepalived
+  hosts: haproxy_keepalived
+  become: true
+
+  tasks:
+    - name: Detener HAProxy si está activo
+      systemd:
+        name: haproxy
+        state: stopped
+      ignore_errors: true
+
+    - name: Detener Keepalived si está activo
+      systemd:
+        name: keepalived
+        state: stopped
+      ignore_errors: true
+
+    - name: Deshabilitar HAProxy
+      systemd:
+        name: haproxy
+        enabled: false
+      ignore_errors: true
+
+    - name: Deshabilitar Keepalived
+      systemd:
+        name: keepalived
+        enabled: false
+      ignore_errors: true
+
+    - name: Eliminar archivos de configuración de HAProxy
+      file:
+        path: /etc/haproxy
+        state: absent
+
+    - name: Eliminar archivos de configuración de Keepalived
+      file:
+        path: /etc/keepalived
+        state: absent
+
+    - name: Eliminar sobreescritura de systemd de HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: absent
+
+    - name: Eliminar unidad personalizada de HAProxy si existiera
+      file:
+        path: /etc/systemd/system/haproxy.service
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar socket de administración de HAProxy
+      file:
+        path: /var/lib/haproxy/admin.sock
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar directorio del socket de HAProxy
+      file:
+        path: /var/lib/haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Desinstalar paquetes HAProxy y Keepalived
+      yum:
+        name:
+          - haproxy
+          - keepalived
+        state: absent
+
+    - name: Eliminar usuario haproxy
+      user:
+        name: haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar grupo haproxy
+      group:
+        name: haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Recargar systemd para aplicar cambios
+      command: systemctl daemon-reexec
