@@ -2,6 +2,13 @@
 # Keepalived Configuration
 # -------------------------------
 
+# Script para verificar que HAProxy esté corriendo
+vrrp_script chk_haproxy {
+    script "pidof haproxy"
+    interval 2
+    weight -10
+}
+
 # VRRP Instance for Kubernetes API (Port 6443)
 vrrp_instance VI_API {
     state BACKUP
@@ -17,8 +24,7 @@ vrrp_instance VI_API {
         {{ api_vip }}
     }
     track_script {
-        script "pidof haproxy"
-        interval 2
+        chk_haproxy
     }
 }
 
@@ -37,7 +43,6 @@ vrrp_instance VI_INGRESS {
         {{ second_vip }}
     }
     track_script {
-        script "pidof haproxy"
-        interval 2
+        chk_haproxy
     }
 }
