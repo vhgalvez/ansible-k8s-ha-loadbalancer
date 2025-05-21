@@ -156,22 +156,19 @@
         enabled: true
         state: stopped
 
-    - name: Esperar a que las VIPs estén activas
-      pause:
-        seconds: 5
-
-    - name: Verificar si las VIPs están activas en la interfaz
+    - name: Esperar hasta que las VIPs estén activas (reintentos)
       shell: |
         ip a | grep -q "{{ api_vip }}" && ip a | grep -q "{{ second_vip }}"
-      register: vip_check
-      failed_when: false
-      changed_when: false
+      register: vip_ready
+      retries: 10
+      delay: 3
+      until: vip_ready.rc == 0
 
     - name: Iniciar HAProxy solo si VIPs están presentes
       systemd:
         name: haproxy
         state: restarted
-      when: vip_check.rc == 0
+      when: vip_ready.rc == 0
 
   handlers:
     - name: Recargar systemd
