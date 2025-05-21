@@ -77,7 +77,7 @@
         state: directory
         owner: haproxy
         group: haproxy
-        mode: "0750"
+        mode: "0755"
 
     - name: Restaurar contexto SELinux para socket (si aplica)
       command: restorecon -Rv {{ haproxy_socket_dir }}
@@ -105,7 +105,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Reiniciar HAProxy
+      notify: Validar configuración HAProxy
 
     - name: Crear directorio de configuración de Keepalived
       file:
@@ -122,12 +122,6 @@
         mode: "0644"
       notify: Reiniciar Keepalived
 
-    - name: Validar configuración de HAProxy
-      command: haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg
-      register: haproxy_check
-      changed_when: false
-      failed_when: haproxy_check.rc != 0
-
     - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
       command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
@@ -139,13 +133,13 @@
         state: directory
         mode: "0755"
 
-    - name: Crear sobreescritura systemd para HAProxy
+    - name: Crear sobreescritura systemd para HAProxy (corrigiendo ExecStart)
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
           [Service]
           ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg
       notify: Recargar systemd
 
     - name: Recargar systemd (por handler si se requiere)
@@ -184,6 +178,13 @@
   handlers:
     - name: Recargar systemd
       command: systemctl daemon-reexec
+
+    - name: Validar configuración HAProxy
+      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+      register: haproxy_check
+      failed_when: haproxy_check.rc != 0
+      changed_when: false
+      notify: Reiniciar HAProxy
 
     - name: Reiniciar HAProxy
       systemd:
