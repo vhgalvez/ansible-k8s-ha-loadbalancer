@@ -67,7 +67,7 @@
         state: stopped
       ignore_errors: true
 
-    - name: Asegurar eliminación del socket previo de HAProxy
+    - name: Eliminar socket anterior de HAProxy
       file:
         path: "{{ haproxy_socket_file }}"
         state: absent
@@ -78,16 +78,22 @@
         state: absent
       ignore_errors: true
 
-    - name: Crear sobreescritura systemd para HAProxy
+    - name: Crear directorio de sobreescritura systemd para HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Crear sobreescritura systemd para HAProxy (corrigiendo ExecStart)
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
           [Service]
           ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS
+          ExecStart=/usr/sbin/haproxy -Ws -f {{ haproxy_config_dir }}/haproxy.cfg
 
     - name: Recargar systemd tras sobreescritura
-      command: systemctl daemon-reload
+      command: systemctl daemon-reexec
 
     - name: Establecer contexto SELinux para socket (si aplica)
       sefcontext:
@@ -97,8 +103,13 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Reetiquetar todos los archivos bajo /var/lib/haproxy
-      command: restorecon -RFv /var/lib/haproxy
+    - name: Reetiquetar archivos bajo /var/lib/haproxy
+      command: restorecon -RFv {{ haproxy_socket_dir }}
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
+    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
+      command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
@@ -146,11 +157,6 @@
       changed_when: false
       failed_when: haproxy_check.rc != 0
 
-    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
-      command: setsebool -P haproxy_connect_any 1
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
     - name: Habilitar y arrancar Keepalived
       systemd:
         name: keepalived
@@ -163,23 +169,21 @@
         enabled: true
         state: stopped
 
-    - name: Esperar a que las VIPs estén activas
-      pause:
-        seconds: 5
-
-    - name: Mostrar estado de interfaces de red y VIPs
-      command: ip a
-      register: ip_output
+    - name: Verificar si al menos una VIP está activa (API o Ingress)
+      shell: |
+        ip a | grep -q "{{ api_vip }}" || ip a | grep -q "{{ second_vip }}"
+      register: vip_ready
       changed_when: false
+      failed_when: false
 
-    - name: Debug - Verifica presencia de las VIPs configuradas
-      debug:
-        msg: "{{ ip_output.stdout_lines | select('search', api_vip) | list + ip_output.stdout_lines | select('search', second_vip) | list }}"
-
-    - name: Iniciar HAProxy (una vez VIP activa)
+    - name: Iniciar HAProxy solo si alguna VIP está presente
       systemd:
         name: haproxy
         state: restarted
+      register: haproxy_start
+      failed_when: false
+      changed_when: haproxy_start.rc == 0
+      when: vip_ready.rc == 0
 
   handlers:
     - name: Recargar systemd
