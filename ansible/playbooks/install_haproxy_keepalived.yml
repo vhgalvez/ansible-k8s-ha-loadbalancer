@@ -172,7 +172,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Validar y reiniciar HAProxy
+      notify: Validar configuración HAProxy
 
     - name: Habilitar y arrancar Keepalived
       systemd:
@@ -198,16 +198,16 @@
         name: keepalived
         state: restarted
 
-    - name: Validar y reiniciar HAProxy
-      listen: Validar y reiniciar HAProxy
-      block:
-        - name: Validar configuración HAProxy
-          command: haproxy -c -f /etc/haproxy/haproxy.cfg
-          register: haproxy_config_check
-          changed_when: false
+    - name: Validar configuración HAProxy
+      listen: Validar configuración HAProxy
+      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+      register: haproxy_config_check
+      changed_when: false
+      notify: Reiniciar HAProxy
 
-        - name: Reiniciar HAProxy si la validación fue exitosa
-          systemd:
-            name: haproxy
-            state: restarted
-          when: haproxy_config_check.rc == 0
+    - name: Reiniciar HAProxy
+      listen: Reiniciar HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
+      when: haproxy_config_check.rc == 0
