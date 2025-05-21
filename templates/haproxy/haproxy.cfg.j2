@@ -1,3 +1,6 @@
+# --------------------
+# Configuración Global
+# --------------------
 global
     log stdout format raw local0
     maxconn 4096
@@ -71,4 +74,3 @@ backend ingress_https_servers
     {% for host in groups['workers'] %}
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
-
