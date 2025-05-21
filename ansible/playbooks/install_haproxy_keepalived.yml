@@ -119,8 +119,10 @@
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
           [Service]
+          Environment="CONFIG={{ haproxy_config_dir }}/haproxy.cfg"
           ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg
+          ExecStartPre=/usr/sbin/haproxy -f $CONFIG -c -q
+          ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG
           RuntimeDirectory=haproxy
           RuntimeDirectoryMode=0750
           User=haproxy
