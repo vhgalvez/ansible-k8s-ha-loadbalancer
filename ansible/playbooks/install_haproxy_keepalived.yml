@@ -68,7 +68,7 @@
 
     - name: Establecer contexto de SELinux para el socket
       sefcontext:
-        target: '{{ haproxy_socket_dir }}(/.*)?'
+        target: "{{ haproxy_socket_dir }}(/.*)?"
         setype: var_run_t
         state: present
       when: ansible_selinux.status == "enabled"
