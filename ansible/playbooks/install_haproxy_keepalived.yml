@@ -13,7 +13,6 @@
     second_vip: "10.17.5.30"
 
   tasks:
-
     - name: Limpiar la caché de DNF
       command: dnf clean all
 
@@ -86,7 +85,9 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS
-      notify: Recargar systemd
+
+    - name: Recargar systemd tras sobreescritura
+      command: systemctl daemon-reload
 
     - name: Establecer contexto SELinux para socket (si aplica)
       sefcontext:
