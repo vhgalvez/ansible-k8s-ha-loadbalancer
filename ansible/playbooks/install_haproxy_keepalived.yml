@@ -109,6 +109,9 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg
+          RuntimeDirectory=haproxy
+          RuntimeDirectoryMode=0750
+      notify: Recargar systemd
 
     - name: Recargar systemd
       command: systemctl daemon-reexec
@@ -183,6 +186,9 @@
       when: vip_ready.rc == 0
 
   handlers:
+    - name: Recargar systemd
+      command: systemctl daemon-reexec
+
     - name: Reiniciar HAProxy
       systemd:
         name: haproxy

@@ -32,16 +32,20 @@
       file:
         path: /etc/haproxy
         state: absent
+        recurse: true
 
     - name: Eliminar archivos de configuración de Keepalived
       file:
         path: /etc/keepalived
         state: absent
+        recurse: true
 
     - name: Eliminar sobreescritura de systemd de HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: absent
+        recurse: true
+      ignore_errors: true
 
     - name: Eliminar unidad personalizada de HAProxy si existiera
       file:
@@ -59,6 +63,7 @@
       file:
         path: /var/lib/haproxy
         state: absent
+        recurse: true
       ignore_errors: true
 
     - name: Desinstalar paquetes HAProxy y Keepalived
@@ -71,6 +76,7 @@
     - name: Eliminar usuario haproxy
       user:
         name: haproxy
+        remove: yes
         state: absent
       ignore_errors: true
 
