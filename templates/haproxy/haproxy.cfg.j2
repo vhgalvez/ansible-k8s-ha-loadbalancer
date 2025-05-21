@@ -5,7 +5,10 @@ global
     log stdout format raw local0
     maxconn 4096
     daemon
-    stats socket {{ haproxy_socket_dir }}/admin.sock mode 600 level admin
+    stats socket {{ haproxy_socket_file }} mode 660 level admin expose-fd listeners
+    user haproxy
+    group haproxy
+    pidfile /run/haproxy.pid
 
 # --------------------
 # Valores por defecto
@@ -75,4 +78,3 @@ backend ingress_https_servers
 # --------------------
 # FIN DE CONFIGURACIÓN
 # --------------------
-
