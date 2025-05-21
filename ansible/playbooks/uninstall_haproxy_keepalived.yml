@@ -1,3 +1,4 @@
+# ansible\playbooks\uninstall_haproxy_keepalived.yml
 - name: Desinstalar completamente HAProxy + Keepalived
   hosts: haproxy_keepalived
   become: true
