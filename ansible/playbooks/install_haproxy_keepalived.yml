@@ -1,4 +1,4 @@
-# ansible\playbooks\install_haproxy_keepalived.yml
+# ansible/playbooks/install_haproxy_keepalived.yml
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
@@ -8,6 +8,7 @@
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
+    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
     api_vip: "10.17.5.10"
     second_vip: "10.17.5.30"
 
@@ -59,7 +60,12 @@
         state: directory
         owner: haproxy
         group: haproxy
-        mode: "0755"
+        mode: "0750"
+
+    - name: Eliminar socket anterior de HAProxy
+      file:
+        path: "{{ haproxy_socket_file }}"
+        state: absent
 
     - name: Establecer contexto SELinux para socket (si aplica)
       sefcontext:
@@ -73,11 +79,6 @@
       command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
-
-    - name: Eliminar socket anterior de HAProxy
-      file:
-        path: "{{ haproxy_socket_dir }}/admin.sock"
-        state: absent
 
     - name: Detectar interfaz activa para Keepalived
       command: ip route get 8.8.8.8
