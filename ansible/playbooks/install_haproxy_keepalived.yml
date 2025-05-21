@@ -90,7 +90,10 @@
       when: ansible_selinux.status == "enabled"
 
     - name: Permitir a HAProxy conectarse a cualquier puerto
-      command: setsebool -P haproxy_connect_any 1
+      seboolean:
+        name: haproxy_connect_any
+        state: true
+        persistent: true
       when: ansible_selinux.status == "enabled"
 
     - name: Detener HAProxy si está activo
@@ -140,6 +143,18 @@
         path: "{{ keepalived_config_dir }}"
         state: directory
         mode: "0755"
+
+    - name: Detectar interfaz activa para Keepalived
+      command: ip route get 8.8.8.8
+      register: default_route
+
+    - name: Definir interfaz para Keepalived
+      set_fact:
+        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
+
+    - name: Mostrar interfaz detectada
+      debug:
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface }}"
 
     - name: Configurar Keepalived
       template:
