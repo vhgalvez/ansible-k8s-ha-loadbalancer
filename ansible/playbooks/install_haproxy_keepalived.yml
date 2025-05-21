@@ -156,14 +156,14 @@
         enabled: true
         state: stopped
 
-    - name: Verificar si ambas VIPs están activas
+    - name: Verificar si al menos una VIP está activa (API o Ingress)
       shell: |
-        ip a | grep -q "{{ api_vip }}" && ip a | grep -q "{{ second_vip }}"
+        ip a | grep -q "{{ api_vip }}" || ip a | grep -q "{{ second_vip }}"
       register: vip_ready
       changed_when: false
       failed_when: false
 
-    - name: Iniciar HAProxy solo si ambas VIPs están presentes
+    - name: Iniciar HAProxy solo si alguna VIP está presente
       systemd:
         name: haproxy
         state: restarted
