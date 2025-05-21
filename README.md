@@ -161,6 +161,12 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_keepalived.yml
 
 
+sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/uninstall_haproxy_keepalived.yml
+
+
+
+
+
 ---
 ansible-k8s-ha-loadbalancer/
 ├── ansible.cfg
