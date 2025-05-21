@@ -119,10 +119,9 @@
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
           [Service]
-          Environment="CONFIG={{ haproxy_config_dir }}/haproxy.cfg"
           ExecStart=
-          ExecStartPre=/usr/sbin/haproxy -f $CONFIG -c -q
-          ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG
+          ExecStartPre=
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg
           RuntimeDirectory=haproxy
           RuntimeDirectoryMode=0750
           User=haproxy
@@ -132,6 +131,7 @@
           PrivateTmp=true
           ProtectSystem=full
           NoNewPrivileges=true
+          Restart=always
       notify: Recargar systemd daemon
 
     - name: Crear directorio de configuración de HAProxy
