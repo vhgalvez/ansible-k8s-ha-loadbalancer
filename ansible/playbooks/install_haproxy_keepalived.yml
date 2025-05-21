@@ -2,7 +2,6 @@
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
-
   vars:
     haproxy_config_dir: "/etc/haproxy"
     keepalived_config_dir: "/etc/keepalived"
@@ -81,7 +80,7 @@
         mode: "0750"
 
     - name: Restaurar contexto SELinux para socket (si aplica)
-      command: restorecon -RFv {{ haproxy_socket_dir }}
+      command: restorecon -Rv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
@@ -134,6 +133,12 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
+    - name: Crear directorio de sobreescritura para HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: "0755"
+
     - name: Crear sobreescritura systemd para HAProxy
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
@@ -143,9 +148,8 @@
           ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS
       notify: Recargar systemd
 
-    - name: Recargar systemd (después de override)
-      systemd:
-        daemon_reload: true
+    - name: Recargar systemd (por handler si se requiere)
+      meta: flush_handlers
 
     - name: Habilitar y arrancar Keepalived
       systemd:
