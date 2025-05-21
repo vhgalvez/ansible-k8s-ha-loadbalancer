@@ -14,7 +14,7 @@ vrrp_instance VI_API {
         auth_pass 12345678
     }
     virtual_ipaddress {
-        {{ api_vip }}  # e.g., 10.17.5.10
+        {{ api_vip }}
     }
     track_script {
         script "pidof haproxy"
@@ -34,7 +34,7 @@ vrrp_instance VI_INGRESS {
         auth_pass 12345678
     }
     virtual_ipaddress {
-        {{ second_vip }}  # e.g., 10.17.5.30
+        {{ second_vip }}
     }
     track_script {
         script "pidof haproxy"
