@@ -1,194 +1,83 @@
-# ansible\playbooks\uninstall_haproxy_keepalived.yml
-- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
+- name: Desinstalar completamente HAProxy + Keepalived
   hosts: haproxy_keepalived
   become: true
-  vars:
-    haproxy_config_dir: "/etc/haproxy"
-    keepalived_config_dir: "/etc/keepalived"
-    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
-    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
-    haproxy_socket_dir: "/var/lib/haproxy"
-    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
-    api_vip: "10.17.5.10"
-    second_vip: "10.17.5.30"
 
   tasks:
-    - name: Limpiar la caché de DNF
-      command: dnf clean all
-
-    - name: Actualizar paquetes del sistema
-      command: dnf update -y
-
-    - name: Verificar conectividad a internet
-      command: ping -c 3 8.8.8.8
-      register: ping_output
-      failed_when: ping_output.rc != 0
-      ignore_errors: true
-
-    - name: Verificar disponibilidad de repositorios
-      command: dnf repolist
-      register: repo_status
-      failed_when: repo_status.rc != 0
-      ignore_errors: true
-
-    - name: Instalar paquetes requeridos
-      yum:
-        name:
-          - net-tools
-          - haproxy
-          - keepalived
-        state: present
-
-    - name: Crear grupo haproxy si no existe
-      group:
-        name: haproxy
-        state: present
-
-    - name: Crear usuario haproxy si no existe
-      user:
-        name: haproxy
-        group: haproxy
-        shell: /sbin/nologin
-        system: yes
-        create_home: no
-        state: present
-
-    - name: Crear directorio para el socket de HAProxy
-      file:
-        path: "{{ haproxy_socket_dir }}"
-        state: directory
-        owner: haproxy
-        group: haproxy
-        mode: "0750"
-
-    - name: Restaurar contexto SELinux para socket (si aplica)
-      command: restorecon -RFv {{ haproxy_socket_dir }}
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
-    - name: Establecer contexto de SELinux para el socket
-      sefcontext:
-        target: '{{ haproxy_socket_dir }}(/.*)?'
-        setype: var_run_t
-        state: present
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
-    - name: Permitir a HAProxy conectarse a cualquier puerto
-      command: setsebool -P haproxy_connect_any 1
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
     - name: Detener HAProxy si está activo
       systemd:
         name: haproxy
         state: stopped
       ignore_errors: true
 
-    - name: Eliminar socket anterior de HAProxy
+    - name: Detener Keepalived si está activo
+      systemd:
+        name: keepalived
+        state: stopped
+      ignore_errors: true
+
+    - name: Deshabilitar HAProxy
+      systemd:
+        name: haproxy
+        enabled: false
+      ignore_errors: true
+
+    - name: Deshabilitar Keepalived
+      systemd:
+        name: keepalived
+        enabled: false
+      ignore_errors: true
+
+    - name: Eliminar archivos de configuración de HAProxy
       file:
-        path: "{{ haproxy_socket_file }}"
+        path: /etc/haproxy
         state: absent
 
-    - name: Asegurar limpieza de unidad HAProxy personalizada
+    - name: Eliminar archivos de configuración de Keepalived
+      file:
+        path: /etc/keepalived
+        state: absent
+
+    - name: Eliminar sobreescritura de systemd de HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: absent
+
+    - name: Eliminar unidad personalizada de HAProxy si existiera
       file:
         path: /etc/systemd/system/haproxy.service
         state: absent
       ignore_errors: true
 
-    - name: Crear directorio de sobreescritura systemd para HAProxy
+    - name: Eliminar socket de administración de HAProxy
       file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: directory
-        mode: "0755"
+        path: /var/lib/haproxy/admin.sock
+        state: absent
+      ignore_errors: true
 
-    - name: Crear sobreescritura systemd para HAProxy
-      copy:
-        dest: /etc/systemd/system/haproxy.service.d/override.conf
-        content: |
-          [Service]
-          ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg
+    - name: Eliminar directorio del socket de HAProxy
+      file:
+        path: /var/lib/haproxy
+        state: absent
+      ignore_errors: true
 
-    - name: Recargar systemd
+    - name: Desinstalar paquetes HAProxy y Keepalived
+      yum:
+        name:
+          - haproxy
+          - keepalived
+        state: absent
+
+    - name: Eliminar usuario haproxy
+      user:
+        name: haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar grupo haproxy
+      group:
+        name: haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Recargar systemd para aplicar cambios
       command: systemctl daemon-reexec
-
-    - name: Detectar interfaz activa para Keepalived
-      command: ip route get 8.8.8.8
-      register: default_route
-
-    - name: Definir interfaz para Keepalived
-      set_fact:
-        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
-
-    - name: Crear directorio de configuración de HAProxy
-      file:
-        path: "{{ haproxy_config_dir }}"
-        state: directory
-        mode: "0755"
-
-    - name: Plantilla de configuración de HAProxy
-      template:
-        src: "{{ haproxy_config_template }}"
-        dest: "{{ haproxy_config_dir }}/haproxy.cfg"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Reiniciar HAProxy
-
-    - name: Crear directorio de configuración de Keepalived
-      file:
-        path: "{{ keepalived_config_dir }}"
-        state: directory
-        mode: "0755"
-
-    - name: Plantilla de configuración de Keepalived
-      template:
-        src: "{{ keepalived_config_template }}"
-        dest: "{{ keepalived_config_dir }}/keepalived.conf"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Reiniciar Keepalived
-
-    - name: Validar configuración HAProxy
-      command: haproxy -c -f /etc/haproxy/haproxy.cfg
-      register: haproxy_check
-      failed_when: haproxy_check.rc != 0
-      changed_when: false
-
-    - name: Habilitar y arrancar Keepalived
-      systemd:
-        name: keepalived
-        enabled: true
-        state: started
-
-    - name: Habilitar HAProxy sin iniciarlo aún
-      systemd:
-        name: haproxy
-        enabled: true
-        state: stopped
-
-    - name: Verificar si al menos una VIP está activa (API o Ingress)
-      shell: |
-        ip a | grep -q "{{ api_vip }}" || ip a | grep -q "{{ second_vip }}"
-      register: vip_ready
-      changed_when: false
-      failed_when: false
-
-    - name: Iniciar HAProxy solo si alguna VIP está presente
-      systemd:
-        name: haproxy
-        state: restarted
-      when: vip_ready.rc == 0
-
-  handlers:
-    - name: Reiniciar HAProxy
-      systemd:
-        name: haproxy
-        state: restarted
-
-    - name: Reiniciar Keepalived
-      systemd:
-        name: keepalived
-        state: restarted
