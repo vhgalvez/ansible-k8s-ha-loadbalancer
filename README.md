@@ -165,6 +165,7 @@ sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/uninstall_haproxy
 
 
 
+ansible-galaxy collection install community.general
 
 
 ---
