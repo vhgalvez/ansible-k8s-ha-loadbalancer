@@ -188,15 +188,18 @@
 
   handlers:
     - name: Recargar systemd daemon
+      listen: Recargar systemd daemon
       systemd:
         daemon_reload: true
 
     - name: Reiniciar Keepalived
+      listen: Reiniciar Keepalived
       systemd:
         name: keepalived
         state: restarted
 
     - name: Validar y reiniciar HAProxy
+      listen: Validar y reiniciar HAProxy
       block:
         - name: Validar configuración HAProxy
           command: haproxy -c -f /etc/haproxy/haproxy.cfg
