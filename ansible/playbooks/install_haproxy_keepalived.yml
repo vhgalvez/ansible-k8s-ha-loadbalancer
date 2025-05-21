@@ -79,7 +79,12 @@
         mode: "0750"
 
     - name: Restaurar contexto SELinux para socket (si aplica)
-      command: restorecon -Rv {{ haproxy_socket_dir }}
+      command: restorecon -RFv {{ haproxy_socket_dir }}
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: true
+
+    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
+      command: setsebool -P haproxy_connect_any 1
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
@@ -120,11 +125,6 @@
         group: root
         mode: "0644"
       notify: Reiniciar Keepalived
-
-    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux)
-      command: setsebool -P haproxy_connect_any 1
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
 
     - name: Crear directorio de sobreescritura para HAProxy
       file:
