@@ -2,6 +2,7 @@
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
+
   vars:
     haproxy_config_dir: "/etc/haproxy"
     keepalived_config_dir: "/etc/keepalived"
@@ -54,6 +55,23 @@
         create_home: no
         state: present
 
+    - name: Detener HAProxy si está activo
+      systemd:
+        name: haproxy
+        state: stopped
+      ignore_errors: true
+
+    - name: Eliminar socket anterior de HAProxy
+      file:
+        path: "{{ haproxy_socket_file }}"
+        state: absent
+
+    - name: Asegurar limpieza de unidad HAProxy personalizada
+      file:
+        path: /etc/systemd/system/haproxy.service
+        state: absent
+      ignore_errors: true
+
     - name: Crear directorio para el socket de HAProxy
       file:
         path: "{{ haproxy_socket_dir }}"
@@ -62,21 +80,8 @@
         group: haproxy
         mode: "0750"
 
-    - name: Eliminar socket anterior de HAProxy
-      file:
-        path: "{{ haproxy_socket_file }}"
-        state: absent
-
-    - name: Establecer contexto SELinux para socket (si aplica)
-      sefcontext:
-        target: "{{ haproxy_socket_dir }}(/.*)?"
-        setype: var_run_t
-        state: present
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: true
-
-    - name: Restaurar contexto SELinux (si aplica)
-      command: restorecon -Rv {{ haproxy_socket_dir }}
+    - name: Restaurar contexto SELinux para socket (si aplica)
+      command: restorecon -RFv {{ haproxy_socket_dir }}
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
@@ -129,15 +134,18 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: true
 
-    - name: Ajustar línea de ejecución de HAProxy con Sleep opcional
-      lineinfile:
-        path: /usr/lib/systemd/system/haproxy.service
-        regexp: '^ExecStart='
-        line: 'ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS'
-        backrefs: yes
+    - name: Crear sobreescritura systemd para HAProxy
+      copy:
+        dest: /etc/systemd/system/haproxy.service.d/override.conf
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/sbin/haproxy -Ws -f $CONFIG -f $CFGDIR -p $PIDFILE $OPTIONS
+      notify: Recargar systemd
 
-    - name: Recargar systemd
-      command: systemctl daemon-reexec
+    - name: Recargar systemd (después de override)
+      systemd:
+        daemon_reload: true
 
     - name: Habilitar y arrancar Keepalived
       systemd:
@@ -170,6 +178,9 @@
         state: restarted
 
   handlers:
+    - name: Recargar systemd
+      command: systemctl daemon-reexec
+
     - name: Reiniciar HAProxy
       systemd:
         name: haproxy
