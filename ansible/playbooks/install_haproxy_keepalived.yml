@@ -13,7 +13,6 @@
     second_vip: "10.17.5.30"
 
   tasks:
-
     - name: Limpiar la caché de DNF
       command: dnf clean all
 
@@ -157,14 +156,14 @@
         enabled: true
         state: stopped
 
-    - name: Verificar si al menos una VIP está activa
+    - name: Verificar si ambas VIPs están activas
       shell: |
-        ip a | grep -q "{{ api_vip }}" || ip a | grep -q "{{ second_vip }}"
+        ip a | grep -q "{{ api_vip }}" && ip a | grep -q "{{ second_vip }}"
       register: vip_ready
       changed_when: false
       failed_when: false
 
-    - name: Iniciar HAProxy solo si alguna VIP está presente
+    - name: Iniciar HAProxy solo si ambas VIPs están presentes
       systemd:
         name: haproxy
         state: restarted
