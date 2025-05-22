@@ -164,6 +164,139 @@ sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_k
 sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/uninstall_haproxy_keepalived.yml
 
 
+# 🧰 Documentación: Bootstrap de Clúster K3s con HAProxy + Keepalived + VIPs
+
+## 📄 Objetivo
+
+Permitir que el nodo `master1` pueda iniciar el clúster K3s sin depender previamente de que HAProxy o Keepalived estén activos y funcionales. Esto resuelve el clásico problema de dependencia cíclica ("el huevo o la gallina") al usar una VIP (IP virtual) como punto de entrada al clúster.
+
+---
+
+## 🏛️ Arquitectura
+
+* **VIP del API Server**: `10.17.5.10`
+* **VIP del Ingress**: `10.17.5.30`
+* **Masters**:
+
+  * `10.17.4.21` (bootstrap)
+  * `10.17.4.22`
+  * `10.17.4.23`
+* **Workers**:
+
+  * `10.17.4.24`, `10.17.4.25`, `10.17.4.26`, `10.17.4.27`
+* **Load Balancers**:
+
+  * `10.17.3.12`, `10.17.3.13`, `10.17.5.20`
+
+---
+
+## 🔄 Orden de inicio esperado
+
+1. El nodo `master1` se inicializa con su IP real (`10.17.4.21`).
+2. Se levanta el `k3s-server` y el `etcd` en `master1`.
+3. Los otros masters se unen usando `https://10.17.4.21:6443` (no la VIP).
+4. Una vez el clúster está operativo:
+
+   * Se configura la VIP (`10.17.5.10`) con Keepalived.
+   * Se habilita HAProxy en los nodos `haproxy_keepalived`.
+5. HAProxy redirige el tráfico de `10.17.5.10:6443` hacia los masters disponibles.
+6. El `kubeconfig` puede comenzar a usar la VIP como endpoint oficial.
+
+---
+
+## ✅ Configuración correcta para romper el ciclo
+
+### 1. **`master1` usa su IP real para bootstrap**
+
+* El script de Ansible no apunta a la VIP (`10.17.5.10`) para levantar el nodo inicial.
+* Esto permite iniciar el API Server antes que HAProxy.
+
+### 2. **HAProxy permite `bind` en IPs no locales**
+
+```yaml
+- name: Habilitar net.ipv4.ip_nonlocal_bind
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_nonlocal_bind
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
+    reload: yes
+    state: present
+```
+
+Esto evita errores de HAProxy como `Cannot bind to VIP`, ya que permite iniciar el proceso sin que la IP esté asignada localmente a la interfaz.
+
+### 3. **Keepalived no requiere HAProxy para iniciar**
+
+```ini
+# override.conf
+[Unit]
+After=haproxy.service
+# NO incluye Requires=haproxy.service
+```
+
+Esto asegura que Keepalived pueda arrancar independientemente de HAProxy. La relación es suave, no bloqueante.
+
+### 4. **VIP solo se usa después de la estabilización**
+
+* El uso de la VIP para el `kubeconfig` solo se hace después de validar que el balanceador HAProxy esté activo.
+
+### 5. **Configuración de HAProxy**
+
+El `haproxy.cfg` está correctamente estructurado para enrutar tráfico TCP en el puerto 6443 hacia los masters:
+
+```haproxy
+frontend kubernetes_api
+    bind 10.17.5.10:6443
+    mode tcp
+    option tcplog
+    default_backend kubernetes_masters
+
+backend kubernetes_masters
+    mode tcp
+    balance roundrobin
+    option tcp-check
+    tcp-check connect port 6443
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    server master-1 10.17.4.21:6443 check
+    server master-2 10.17.4.22:6443 check
+    server master-3 10.17.4.23:6443 check
+```
+
+---
+
+## 🔧 Validaciones adicionales
+
+* Comando para verificar si HAProxy permite bind:
+
+```bash
+sysctl net.ipv4.ip_nonlocal_bind
+```
+
+* Verificar configuración de HAProxy:
+
+```bash
+haproxy -c -f /etc/haproxy/haproxy.cfg
+```
+
+* Verificar si está corriendo:
+
+```bash
+sudo systemctl status haproxy
+```
+
+---
+
+## 🎯 Conclusión
+
+Con esta configuración:
+
+* El nodo `master1` puede iniciar el clúster sin la VIP.
+* Los nodos balanceadores y Keepalived pueden arrancar sin romper dependencias.
+* HAProxy puede arrancar incluso si no posee la VIP.
+
+👍 Estás aplicando correctamente un patrón de alta disponibilidad tolerante a fallos y circularidades de dependencia.
+
+
 
 ansible-galaxy collection install community.general
 
