@@ -2,7 +2,6 @@
 # Keepalived Configuration
 # -------------------------------
 
-# Script para verificar que HAProxy esté corriendo
 vrrp_script chk_haproxy {
     script "pidof haproxy"
     interval 2
