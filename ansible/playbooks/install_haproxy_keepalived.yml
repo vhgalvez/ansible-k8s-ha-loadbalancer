@@ -7,8 +7,9 @@
     keepalived_config_dir: "/etc/keepalived"
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
-    haproxy_socket_dir: "/var/lib/haproxy"
-    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
+    haproxy_socket_dir: "/var/lib/haproxy" # Asegúrate que esta variable está definida en all:vars o aquí
+    haproxy_socket_file: "/var/lib/haproxy/admin.sock" # Definida en el playbook original
+    # api_vip y second_vip se toman de all:vars en tu hosts.ini
 
   tasks:
     - name: Limpiar la caché de DNF
@@ -17,7 +18,7 @@
 
     - name: Actualizar paquetes del sistema
       command: dnf update -y
-      changed_when: false
+      changed_when: false # Considera quitar esto si quieres ver 'changed' cuando se actualizan paquetes
 
     - name: Verificar conectividad a internet
       command: ping -c 3 8.8.8.8
@@ -72,12 +73,12 @@
         sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
         reload: yes
         state: present
-      notify: Reiniciar Keepalived
+      notify: Reiniciar Keepalived # Para que Keepalived reevalúe con HAProxy más estable
 
     - name: Restaurar contexto SELinux para el directorio del socket
       command: "restorecon -RFv {{ haproxy_socket_dir }}"
       when: ansible_selinux.status == "enabled" and ansible_selinux.config_mode == "enforcing"
-      ignore_errors: true
+      ignore_errors: true # sefcontext es más declarativo y persistente
       changed_when: false
 
     - name: Establecer contexto SELinux para el socket de HAProxy
@@ -86,6 +87,7 @@
         setype: var_run_t
         state: present
       when: ansible_selinux.status == "enabled" and ansible_selinux.config_mode == "enforcing"
+      # Considera notificar 'load_policy' o reiniciar si es un cambio que lo requiera.
 
     - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux boolean)
       seboolean:
@@ -94,25 +96,25 @@
         persistent: true
       when: ansible_selinux.status == "enabled"
 
-    - name: Detener HAProxy si está activo
+    - name: Detener HAProxy si está activo (antes de aplicar cambios de configuración)
       systemd:
         name: haproxy
         state: stopped
       ignore_errors: true
       changed_when: false
 
-    - name: Eliminar socket anterior de HAProxy
+    - name: Eliminar socket anterior de HAProxy (si existe)
       file:
         path: "{{ haproxy_socket_file }}"
         state: absent
 
-    - name: Crear directorio override systemd para HAProxy
+    - name: Crear directorio para la sobreescritura de systemd de HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: directory
         mode: "0755"
 
-    - name: Crear sobreescritura systemd para HAProxy
+    - name: Crear sobreescritura systemd para HAProxy (override.conf)
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
@@ -146,48 +148,49 @@
       command: ip -4 route get 8.8.8.8
       register: default_route
       changed_when: false
-      failed_when: default_route.rc != 0
+      failed_when: default_route.rc != 0 # Fallar si no se puede obtener la ruta
+      ignore_errors: false # No ignorar este error, es crucial
 
-    - name: Definir interfaz para Keepalived
+    - name: Definir interfaz para Keepalived (keepalived_interface)
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
       when: default_route.stdout is defined and 'dev' in default_route.stdout
 
-    - name: Mostrar interfaz detectada
+    - name: Mostrar interfaz detectada para Keepalived
       debug:
-        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada (revisar tarea anterior)') }}"
 
-    - name: Configurar Keepalived
+    - name: Configurar Keepalived (keepalived.conf)
       template:
         src: "{{ keepalived_config_template }}"
         dest: "{{ keepalived_config_dir }}/keepalived.conf"
         owner: root
         group: root
         mode: "0644"
-      when: keepalived_interface is defined
+      when: keepalived_interface is defined and keepalived_interface != 'No detectada (revisar tarea anterior)'
       notify: Reiniciar Keepalived
 
-    - name: Configurar HAProxy
+    - name: Configurar HAProxy (haproxy.cfg)
       template:
         src: "{{ haproxy_config_template }}"
         dest: "{{ haproxy_config_dir }}/haproxy.cfg"
         owner: root
         group: root
         mode: "0644"
-      notify: Validar y reiniciar HAProxy
+      notify: Validar y reiniciar HAProxy # Notificación crucial
 
-    - name: Habilitar y arrancar Keepalived
+    - name: Habilitar y arrancar servicio Keepalived
       systemd:
         name: keepalived
         enabled: true
         state: started
-      when: keepalived_interface is defined
+      when: keepalived_interface is defined and keepalived_interface != 'No detectada (revisar tarea anterior)'
 
-    - name: Habilitar e iniciar HAProxy (con soporte a IPs no locales)
+    - name: Habilitar e iniciar servicio HAProxy
       systemd:
         name: haproxy
         enabled: true
-        state: started
+        state: started # Se inicia en todos los nodos; ip_nonlocal_bind lo permite
 
   handlers:
     - name: Recargar systemd daemon
@@ -201,13 +204,13 @@
 
     - name: Validar y reiniciar HAProxy
       block:
-        - name: Validar configuración de HAProxy
+        - name: Validar configuración HAProxy (manejador)
           command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
-          register: haproxy_validation
+          register: haproxy_config_check_handler # Renombrar para evitar colisión con posible var fuera de handler
           changed_when: false
 
-        - name: Reiniciar HAProxy si configuración es válida
+        - name: Reiniciar HAProxy si la validación fue exitosa (manejador)
           systemd:
             name: haproxy
             state: restarted
-          when: haproxy_validation.rc == 0
+          when: haproxy_config_check_handler.rc == 0
