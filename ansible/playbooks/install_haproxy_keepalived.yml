@@ -86,20 +86,19 @@
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
       notify: Recargar systemd daemon
 
-    # Keepalived override (esperar a HAProxy)
+    # Keepalived override (sin Requires)
     - name: Crear directorio override de systemd para Keepalived
       file:
         path: /etc/systemd/system/keepalived.service.d
         state: directory
         mode: "0755"
 
-    - name: Crear override de systemd para Keepalived (espera a HAProxy)
+    - name: Crear override de systemd para Keepalived (solo After=haproxy)
       copy:
         dest: /etc/systemd/system/keepalived.service.d/override.conf
         content: |
           [Unit]
           After=haproxy.service
-          Requires=haproxy.service
       notify: Recargar systemd daemon
 
     - name: Crear directorios de configuración
