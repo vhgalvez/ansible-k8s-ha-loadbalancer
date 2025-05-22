@@ -177,18 +177,11 @@
         mode: "0644"
       notify: Validar configuración HAProxy
 
-    - name: Verificar si VIP está activa (usando shell correctamente)
-      shell: ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}"
-      register: vip_active
-      changed_when: false
-      ignore_errors: true
-
-    - name: Habilitar e iniciar HAProxy si VIP está activa
+    - name: Habilitar e iniciar HAProxy
       systemd:
         name: haproxy
         enabled: true
         state: started
-      when: vip_active.rc == 0
 
   handlers:
     - name: Recargar systemd daemon
