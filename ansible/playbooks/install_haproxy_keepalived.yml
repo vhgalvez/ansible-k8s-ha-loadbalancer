@@ -47,13 +47,27 @@
         create_home: no
         state: present
 
-    - name: Crear directorio del socket de HAProxy
-      file:
-        path: "{{ haproxy_socket_dir }}"
-        state: directory
-        owner: haproxy
-        group: haproxy
-        mode: "0750"
+    - name: Crear directorio del socket de HAProxy con permisos correctos y contexto SELinux
+      block:
+        - name: Crear directorio del socket de HAProxy
+          file:
+            path: "{{ haproxy_socket_dir }}"
+            state: directory
+            owner: haproxy
+            group: haproxy
+            mode: "0750"
+
+        - name: Restaurar contexto SELinux del socket (si aplica)
+          command: "restorecon -RFv {{ haproxy_socket_dir }}"
+          when: ansible_selinux.status == "enabled"
+          ignore_errors: true
+
+        - name: Habilitar haproxy_connect_any en SELinux (si aplica)
+          seboolean:
+            name: haproxy_connect_any
+            state: true
+            persistent: true
+          when: ansible_selinux.status == "enabled"
 
     - name: Habilitar net.ipv4.ip_nonlocal_bind
       ansible.posix.sysctl:
@@ -64,13 +78,6 @@
         state: present
       notify: Reiniciar Keepalived
 
-    - name: Restaurar contexto SELinux del socket (si aplica)
-      command: "restorecon -RFv {{ haproxy_socket_dir }}"
-      when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
-      ignore_errors: true
-      changed_when: false
-
-    # HAProxy override
     - name: Crear directorio override de systemd para HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
@@ -86,7 +93,6 @@
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
       notify: Recargar systemd daemon
 
-    # Keepalived override (sin Requires)
     - name: Crear directorio override de systemd para Keepalived
       file:
         path: /etc/systemd/system/keepalived.service.d
