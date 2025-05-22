@@ -70,6 +70,7 @@
       ignore_errors: true
       changed_when: false
 
+    # HAProxy override
     - name: Crear directorio override de systemd para HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
@@ -83,6 +84,22 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+      notify: Recargar systemd daemon
+
+    # Keepalived override (esperar a HAProxy)
+    - name: Crear directorio override de systemd para Keepalived
+      file:
+        path: /etc/systemd/system/keepalived.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Crear override de systemd para Keepalived (espera a HAProxy)
+      copy:
+        dest: /etc/systemd/system/keepalived.service.d/override.conf
+        content: |
+          [Unit]
+          After=haproxy.service
+          Requires=haproxy.service
       notify: Recargar systemd daemon
 
     - name: Crear directorios de configuración
@@ -140,34 +157,28 @@
       register: vip_check
       changed_when: false
       failed_when: false
-      when: inventory_hostname == "10.17.5.20"
 
     - name: Mostrar estado de verificación de VIPs
       debug:
         msg: "Resultado de vip_check.rc = {{ vip_check.rc }} en {{ inventory_hostname }}"
-      when: inventory_hostname == "10.17.5.20"
 
     - name: Reiniciar HAProxy si alguna VIP está activa
       systemd:
         name: haproxy
         state: restarted
-      when:
-        - inventory_hostname == "10.17.5.20"
-        - vip_check.rc == 0
+      when: vip_check.rc == 0
 
     - name: Habilitar HAProxy si alguna VIP está activa
       systemd:
         name: haproxy
         enabled: true
-      when:
-        - inventory_hostname == "10.17.5.20"
-        - vip_check.rc == 0
+      when: vip_check.rc == 0
 
-    - name: Habilitar HAProxy en nodos backup (sin iniciar)
+    - name: Habilitar HAProxy en nodos sin VIP (sin iniciar)
       systemd:
         name: haproxy
         enabled: true
-      when: inventory_hostname != "10.17.5.20"
+      when: vip_check.rc != 0
 
   handlers:
     - name: Recargar systemd daemon
