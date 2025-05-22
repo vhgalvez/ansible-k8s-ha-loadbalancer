@@ -175,7 +175,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Validar y reiniciar HAProxy
+      notify: Validar configuración HAProxy
 
     - name: Verificar si VIP está activa
       command: ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}"
@@ -200,16 +200,14 @@
         name: keepalived
         state: restarted
 
-    - name: Validar y reiniciar HAProxy
-      block:
-        - name: Validar configuración HAProxy
-          command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
-          register: haproxy_config_check
-          changed_when: false
-          ignore_errors: true
+    - name: Validar configuración HAProxy
+      command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
+      register: haproxy_config_check_result
+      changed_when: false
+      notify: Reiniciar HAProxy
+      ignore_errors: true
 
-        - name: Reiniciar HAProxy si configuración válida
-          systemd:
-            name: haproxy
-            state: restarted
-          when: haproxy_config_check.rc == 0
+    - name: Reiniciar HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
