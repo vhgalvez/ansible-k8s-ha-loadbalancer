@@ -91,6 +91,8 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+          Restart=always
+          RestartSec=3
       notify: Recargar systemd daemon
 
     - name: Crear directorio override de systemd para Keepalived
