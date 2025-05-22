@@ -202,12 +202,12 @@
 
     - name: Validar y reiniciar HAProxy
       block:
-        - name: Validar configuración HAProxy (handler)
+        - name: Validar configuración HAProxy
           command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
           register: haproxy_config_check_handler
           changed_when: false
 
-        - name: Reiniciar HAProxy si la validación fue exitosa
+        - name: Reiniciar HAProxy si la configuración es válida
           systemd:
             name: haproxy
             state: restarted
