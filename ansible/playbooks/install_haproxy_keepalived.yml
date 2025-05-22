@@ -1,182 +1,204 @@
 # ansible/playbooks/install_haproxy_keepalived.yml
-- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
-  hosts: haproxy_keepalived
+- name: Instalar y Configurar K3s con alta disponibilidad (etcd) en el Clúster
+  hosts: all
   become: true
+  gather_facts: no
+
   vars:
-    haproxy_config_dir: "/etc/haproxy"
-    keepalived_config_dir: "/etc/keepalived"
-    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
-    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
-    haproxy_socket_dir: "/var/lib/haproxy"
-    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
-    api_vip: "10.17.5.10"
-    second_vip: "10.17.5.30"
+    k3s_url: "https://github.com/k3s-io/k3s/releases/latest/download/k3s"
+    k3s_token_path: "/var/lib/rancher/k3s/server/node-token"
+    vip_ip: "10.17.5.10"
+    k3s_master_ip: "10.17.4.21"
 
   tasks:
-    - name: Limpiar la caché de DNF
-      command: dnf clean all
-      changed_when: false
+    - name: Asegurar directorios necesarios
+      ansible.builtin.raw: |
+        mkdir -p /opt/bin /etc/rancher/k3s /var/lib/rancher/k3s/server
+      when: inventory_hostname in groups['masters'] + groups['longhorn_nodes']
 
-    - name: Actualizar paquetes del sistema
-      command: dnf update -y
-      changed_when: false
+    - name: Descargar e instalar K3s
+      ansible.builtin.raw: |
+        curl -Lo /opt/bin/k3s "{{ k3s_url }}" && chmod +x /opt/bin/k3s
+      args:
+        timeout: 600
+      when: inventory_hostname in groups['masters'] + groups['longhorn_nodes']
 
-    - name: Verificar conectividad a internet
-      command: ping -c 3 8.8.8.8
-      register: ping_output
-      failed_when: ping_output.rc != 0
-      ignore_errors: true
-      changed_when: false
+    - name: Verificar que el binario no está en uso
+      ansible.builtin.raw: fuser -k /opt/bin/k3s || true
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Instalar paquetes requeridos
-      yum:
-        name:
-          - net-tools
-          - haproxy
-          - keepalived
-          - python3-dnf
-          - libselinux-python3
-        state: present
+    - name: Crear enlaces simbólicos
+      ansible.builtin.raw: |
+        ln -sf /opt/bin/k3s /opt/bin/kubectl
+        ln -sf /opt/bin/k3s /opt/bin/crictl
+        ln -sf /opt/bin/k3s /opt/bin/ctr
+      when: inventory_hostname in groups['masters'] + groups['longhorn_nodes']
 
-    - name: Crear grupo y usuario haproxy
-      user:
-        name: haproxy
-        group: haproxy
-        shell: /sbin/nologin
-        system: yes
-        create_home: no
-        state: present
+    - name: Configurar primer nodo master
+      ansible.builtin.raw: |
+        cat <<EOF > /etc/systemd/system/k3s.service
+        [Unit]
+        Description=Lightweight Kubernetes
+        Wants=network-online.target
+        After=network-online.target
 
-    - name: Crear directorio del socket de HAProxy con permisos correctos y contexto SELinux
-      block:
-        - name: Crear directorio del socket de HAProxy
-          file:
-            path: "{{ haproxy_socket_dir }}"
-            state: directory
-            owner: haproxy
-            group: haproxy
-            mode: "0750"
+        [Service]
+        Type=notify
+        ExecStartPre=-/sbin/modprobe br_netfilter
+        ExecStartPre=-/sbin/modprobe overlay
+        ExecStart=/opt/bin/k3s server --cluster-init --tls-san {{ vip_ip }} --node-ip {{ ansible_host }} --advertise-address {{ ansible_host }} --write-kubeconfig /etc/rancher/k3s/k3s.yaml --write-kubeconfig-mode 644
+        Restart=always
+        KillMode=process
+        Delegate=yes
+        LimitNOFILE=1048576
+        LimitNPROC=infinity
+        LimitCORE=infinity
 
-        - name: Restaurar contexto SELinux del socket (si aplica)
-          command: "restorecon -RFv {{ haproxy_socket_dir }}"
-          when: ansible_selinux.status == "enabled"
-          ignore_errors: true
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      when: inventory_hostname == k3s_master_ip
 
-        - name: Habilitar haproxy_connect_any en SELinux (si aplica)
-          seboolean:
-            name: haproxy_connect_any
-            state: true
-            persistent: true
-          when: ansible_selinux.status == "enabled"
+    - name: Iniciar primer nodo master
+      ansible.builtin.raw: |
+        systemctl daemon-reload
+        systemctl enable k3s
+        systemctl start k3s
+        systemctl is-active k3s
+      register: k3s_start
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Habilitar net.ipv4.ip_nonlocal_bind
-      ansible.posix.sysctl:
-        name: net.ipv4.ip_nonlocal_bind
-        value: "1"
-        sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
-        reload: yes
-        state: present
-      notify: Reiniciar Keepalived
+    - name: Mostrar logs de k3s
+      ansible.builtin.raw: journalctl -u k3s -n 100 --no-pager
+      register: k3s_logs
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Crear directorio override de systemd para HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: directory
-        mode: "0755"
+    - name: Debug logs
+      ansible.builtin.debug:
+        var: k3s_logs.stdout_lines
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Crear override de systemd para HAProxy
-      copy:
-        dest: /etc/systemd/system/haproxy.service.d/override.conf
-        content: |
-          [Service]
-          ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
-          Restart=always
-          RestartSec=3
-      notify: Recargar systemd daemon
+    - name: Esperar a que K3s esté activo
+      ansible.builtin.raw: |
+        timeout=120
+        while ! systemctl is-active k3s >/dev/null 2>&1 && [ $timeout -gt 0 ]; do
+          echo "Esperando a que K3s esté activo... ($timeout s restantes)"
+          sleep 5
+          timeout=$((timeout-5))
+        done
+        [ $timeout -le 0 ] && echo "Timeout" && exit 1 || true
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Crear directorio override de systemd para Keepalived
-      file:
-        path: /etc/systemd/system/keepalived.service.d
-        state: directory
-        mode: "0755"
+    - name: Esperar que el token del master esté disponible
+      ansible.builtin.raw: |
+        timeout=120
+        while [ ! -f "{{ k3s_token_path }}" ] && [ $timeout -gt 0 ]; do
+          echo "Esperando el archivo node-token... ($timeout s restantes)"
+          sleep 5
+          timeout=$((timeout-5))
+        done
+        [ $timeout -le 0 ] && echo "Timeout al esperar el token" && exit 1 || true
+      when: inventory_hostname == k3s_master_ip
 
-    - name: Crear override de systemd para Keepalived (solo After=haproxy)
-      copy:
-        dest: /etc/systemd/system/keepalived.service.d/override.conf
-        content: |
-          [Unit]
-          After=haproxy.service
-      notify: Recargar systemd daemon
+    - name: Obtener token del master
+      ansible.builtin.raw: cat "{{ k3s_token_path }}"
+      register: k3s_token
+      delegate_to: "{{ k3s_master_ip }}"
+      run_once: true
+      failed_when: k3s_token.rc != 0
 
-    - name: Crear directorios de configuración
-      file:
-        path: "{{ item }}"
-        state: directory
-        mode: "0755"
-      loop:
-        - "{{ haproxy_config_dir }}"
-        - "{{ keepalived_config_dir }}"
+    - name: Configurar nodos masters secundarios
+      ansible.builtin.raw: |
+        cat <<EOF > /etc/systemd/system/k3s.service
+        [Unit]
+        Description=Lightweight Kubernetes
+        Wants=network-online.target
+        After=network-online.target
 
-    - name: Detectar interfaz principal
-      command: ip -4 route get 8.8.8.8
-      register: default_route
-      changed_when: false
+        [Service]
+        Type=notify
+        ExecStartPre=-/sbin/modprobe br_netfilter
+        ExecStartPre=-/sbin/modprobe overlay
+        ExecStart=/opt/bin/k3s server --server https://{{ vip_ip }}:6443 --token {{ k3s_token.stdout }} --tls-san {{ vip_ip }} --node-name {{ inventory_hostname }}
+        Restart=always
+        KillMode=process
+        Delegate=yes
+        LimitNOFILE=1048576
+        LimitNPROC=infinity
+        LimitCORE=infinity
 
-    - name: Definir interfaz para Keepalived
-      set_fact:
-        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      when: inventory_hostname in groups['masters'] and inventory_hostname != k3s_master_ip
 
-    - name: Mostrar interfaz detectada
-      debug:
-        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
+    - name: Iniciar K3s en todos los masters (gracias a ip_nonlocal_bind)
+      ansible.builtin.raw: |
+        systemctl daemon-reload
+        systemctl enable k3s
+        systemctl restart k3s
+        systemctl is-active k3s
+      register: k3s_join_start
+      when: inventory_hostname in groups['masters'] and inventory_hostname != k3s_master_ip
 
-    - name: Configurar Keepalived
-      template:
-        src: "{{ keepalived_config_template }}"
-        dest: "{{ keepalived_config_dir }}/keepalived.conf"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Reiniciar Keepalived
+    - name: Esperar que K3s esté activo (masters secundarios)
+      ansible.builtin.raw: |
+        timeout=120
+        while ! systemctl is-active k3s >/dev/null 2>&1 && [ $timeout -gt 0 ]; do
+          echo "Esperando a que K3s esté activo... ($timeout s restantes)"
+          sleep 5
+          timeout=$((timeout-5))
+        done
+        [ $timeout -le 0 ] && echo "Timeout" && exit 1 || true
+      when: inventory_hostname in groups['masters'] and inventory_hostname != k3s_master_ip
 
-    - name: Configurar HAProxy
-      template:
-        src: "{{ haproxy_config_template }}"
-        dest: "{{ haproxy_config_dir }}/haproxy.cfg"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Validar configuración HAProxy
+    - name: Configurar nodos longhorn/workers
+      ansible.builtin.raw: |
+        cat <<EOF > /etc/systemd/system/k3s-agent.service
+        [Unit]
+        Description=Lightweight Kubernetes Node
+        After=network-online.target
 
-    - name: Esperar estabilización de Keepalived
-      pause:
-        seconds: 20
+        [Service]
+        Type=exec
+        ExecStart=/opt/bin/k3s agent --server https://{{ vip_ip }}:6443 --token {{ k3s_token.stdout }} --node-ip {{ ansible_host }}
+        Restart=always
+        LimitNOFILE=1048576
+        LimitNPROC=1048576
+        LimitCORE=infinity
 
-    - name: Iniciar o reiniciar HAProxy siempre (con soporte ip_nonlocal_bind)
-      systemd:
-        name: haproxy
-        state: restarted
-        enabled: true
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+      when: inventory_hostname in groups['longhorn_nodes']
 
-  handlers:
-    - name: Recargar systemd daemon
-      systemd:
-        daemon_reload: true
+    - name: Iniciar K3s-agent en nodos longhorn/workers
+      ansible.builtin.raw: |
+        systemctl daemon-reload
+        systemctl enable k3s-agent
+        systemctl start k3s-agent
+        systemctl is-active k3s-agent
+      register: k3s_agent_start
+      when: inventory_hostname in groups['longhorn_nodes']
 
-    - name: Reiniciar Keepalived
-      systemd:
-        name: keepalived
-        state: restarted
+    - name: Esperar que k3s-agent esté activo
+      ansible.builtin.raw: |
+        timeout=120
+        while ! systemctl is-active k3s-agent >/dev/null 2>&1 && [ $timeout -gt 0 ]; do
+          echo "Esperando a que K3s-agent esté activo... ($timeout s restantes)"
+          sleep 5
+          timeout=$((timeout-5))
+        done
+        [ $timeout -le 0 ] && echo "Timeout" && exit 1 || true
+      when: inventory_hostname in groups['longhorn_nodes']
 
-    - name: Validar configuración HAProxy
-      command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
-      register: haproxy_config_check_result
-      changed_when: false
-      notify: Reiniciar HAProxy
-      ignore_errors: true
-
-    - name: Reiniciar HAProxy
-      systemd:
-        name: haproxy
-        state: restarted
+    - name: Configurar kubeconfig en todos los nodos relevantes
+      ansible.builtin.raw: |
+        if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+          mkdir -p /home/core/.kube && \
+          cp /etc/rancher/k3s/k3s.yaml /home/core/.kube/config && \
+          sed -i 's/127.0.0.1/{{ vip_ip }}/g' /home/core/.kube/config && \
+          chown core:core /home/core/.kube/config && \
+          chmod 644 /home/core/.kube/config
+        fi
+      when: inventory_hostname in groups['masters'] or inventory_hostname in groups['longhorn_nodes']
