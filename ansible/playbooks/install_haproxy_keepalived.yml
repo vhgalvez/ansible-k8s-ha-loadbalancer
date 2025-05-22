@@ -13,7 +13,6 @@
     second_vip: "10.17.5.30"
 
   tasks:
-
     - name: Limpiar la caché de DNF
       command: dnf clean all
       changed_when: false
@@ -106,7 +105,7 @@
 
     - name: Mostrar interfaz detectada
       debug:
-        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface }}"
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
 
     - name: Configurar Keepalived
       template:
@@ -126,15 +125,18 @@
         mode: "0644"
       notify: Validar configuración HAProxy
 
-    - name: Verificar si alguna VIP está activa
+    - name: Esperar estabilización de Keepalived
+      pause:
+        seconds: 5
+
+    - name: Verificar si alguna VIP está activa en este nodo
       shell: |
-        ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}" || \
-        ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ second_vip }}"
+        ip -4 addr | grep -q "{{ api_vip }}" || ip -4 addr | grep -q "{{ second_vip }}"
       register: vip_check
       changed_when: false
       ignore_errors: true
 
-    - name: Habilitar e iniciar HAProxy si hay VIP activa
+    - name: Habilitar e iniciar HAProxy si este nodo tiene alguna VIP
       systemd:
         name: haproxy
         enabled: true
@@ -142,7 +144,6 @@
       when: vip_check.rc == 0
 
   handlers:
-
     - name: Recargar systemd daemon
       systemd:
         daemon_reload: true
