@@ -28,13 +28,6 @@
       ignore_errors: true
       changed_when: false
 
-    - name: Verificar disponibilidad de repositorios
-      command: dnf repolist
-      register: repo_status
-      failed_when: repo_status.rc != 0
-      ignore_errors: true
-      changed_when: false
-
     - name: Instalar paquetes requeridos
       yum:
         name:
@@ -45,12 +38,7 @@
           - libselinux-python3
         state: present
 
-    - name: Crear grupo haproxy si no existe
-      group:
-        name: haproxy
-        state: present
-
-    - name: Crear usuario haproxy si no existe
+    - name: Crear grupo y usuario haproxy
       user:
         name: haproxy
         group: haproxy
@@ -59,7 +47,7 @@
         create_home: no
         state: present
 
-    - name: Crear directorio para el socket de HAProxy
+    - name: Crear directorio del socket de HAProxy
       file:
         path: "{{ haproxy_socket_dir }}"
         state: directory
@@ -67,7 +55,7 @@
         group: haproxy
         mode: "0750"
 
-    - name: Habilitar bind a IPs no locales
+    - name: Habilitar net.ipv4.ip_nonlocal_bind
       ansible.posix.sysctl:
         name: net.ipv4.ip_nonlocal_bind
         value: "1"
@@ -76,75 +64,31 @@
         state: present
       notify: Reiniciar Keepalived
 
-    - name: Restaurar contexto SELinux para el socket
+    - name: Restaurar contexto SELinux del socket (si aplica)
       command: "restorecon -RFv {{ haproxy_socket_dir }}"
       when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
       ignore_errors: true
       changed_when: false
 
-    - name: Establecer contexto SELinux para el socket
-      sefcontext:
-        target: "{{ haproxy_socket_dir }}(/.*)?"
-        setype: var_run_t
-        state: present
-      when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
-
-    - name: Permitir a HAProxy conectarse a cualquier puerto
-      seboolean:
-        name: haproxy_connect_any
-        state: true
-        persistent: true
-      when: ansible_selinux.status == "enabled"
-
-    - name: Detener HAProxy si está activo
-      systemd:
-        name: haproxy
-        state: stopped
-      ignore_errors: true
-      changed_when: false
-
-    - name: Eliminar socket anterior de HAProxy
-      file:
-        path: "{{ haproxy_socket_file }}"
-        state: absent
-
-    - name: Crear directorio override systemd para HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: directory
-        mode: "0755"
-
-    - name: Crear sobreescritura systemd para HAProxy
+    - name: Crear override de systemd para HAProxy (corrige variable $CONFIG)
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
           [Service]
           ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f {{ haproxy_config_dir }}/haproxy.cfg -p /run/haproxy.pid
-          RuntimeDirectory=haproxy
-          RuntimeDirectoryMode=0750
-          User=haproxy
-          Group=haproxy
-          AmbientCapabilities=CAP_NET_BIND_SERVICE
-          CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-          PrivateTmp=true
-          ProtectSystem=full
-          NoNewPrivileges=true
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
       notify: Recargar systemd daemon
 
-    - name: Crear directorio de configuración de HAProxy
+    - name: Crear directorios de configuración
       file:
-        path: "{{ haproxy_config_dir }}"
+        path: "{{ item }}"
         state: directory
         mode: "0755"
+      loop:
+        - "{{ haproxy_config_dir }}"
+        - "{{ keepalived_config_dir }}"
 
-    - name: Crear directorio de configuración de Keepalived
-      file:
-        path: "{{ keepalived_config_dir }}"
-        state: directory
-        mode: "0755"
-
-    - name: Detectar interfaz activa para Keepalived
+    - name: Detectar interfaz principal
       command: ip -4 route get 8.8.8.8
       register: default_route
       changed_when: false
@@ -152,11 +96,6 @@
     - name: Definir interfaz para Keepalived
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
-      when: default_route.stdout is defined and 'dev' in default_route.stdout
-
-    - name: Mostrar interfaz detectada
-      debug:
-        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
 
     - name: Configurar Keepalived
       template:
@@ -165,7 +104,6 @@
         owner: root
         group: root
         mode: "0644"
-      when: keepalived_interface is defined
       notify: Reiniciar Keepalived
 
     - name: Configurar HAProxy
@@ -177,11 +115,20 @@
         mode: "0644"
       notify: Validar configuración HAProxy
 
-    - name: Habilitar e iniciar HAProxy
+    - name: Verificar si alguna VIP está activa
+      shell: |
+        ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}" || \
+        ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ second_vip }}"
+      register: vip_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Habilitar e iniciar HAProxy si hay VIP activa
       systemd:
         name: haproxy
         enabled: true
         state: started
+      when: vip_check.rc == 0
 
   handlers:
     - name: Recargar systemd daemon
