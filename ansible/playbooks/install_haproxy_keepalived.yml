@@ -11,10 +11,8 @@
     haproxy_socket_file: "/var/lib/haproxy/admin.sock"
     api_vip: "10.17.5.10"
     second_vip: "10.17.5.30"
-    vip_host: "10.17.5.20"  # Nodo que inicia HAProxy desde el principio
 
   tasks:
-
     - name: Limpiar la caché de DNF
       command: dnf clean all
       changed_when: false
@@ -128,16 +126,38 @@
       notify: Validar configuración HAProxy
 
     - name: Esperar estabilización de Keepalived
-      wait_for:
-        timeout: 15
-        msg: "Esperando a que Keepalived asigne VIPs"
+      pause:
+        seconds: 5
 
-    - name: Habilitar y reiniciar HAProxy solo en el nodo principal (VIP host)
+    - name: Verificar si alguna VIP está activa en este nodo (solo en 10.17.5.20)
+      shell: |
+        ip -4 addr | grep -q "{{ api_vip }}" || ip -4 addr | grep -q "{{ second_vip }}"
+      register: vip_check
+      changed_when: false
+      ignore_errors: true
+      when: inventory_hostname == "10.17.5.20"
+
+    - name: Reiniciar HAProxy si alguna VIP está activa
+      systemd:
+        name: haproxy
+        state: restarted
+      when:
+        - inventory_hostname == "10.17.5.20"
+        - vip_check.rc == 0
+
+    - name: Habilitar HAProxy si alguna VIP está activa
       systemd:
         name: haproxy
         enabled: true
-        state: restarted
-      when: inventory_hostname == vip_host
+      when:
+        - inventory_hostname == "10.17.5.20"
+        - vip_check.rc == 0
+
+    - name: Habilitar HAProxy en nodos backup (sin iniciar)
+      systemd:
+        name: haproxy
+        enabled: true
+      when: inventory_hostname != "10.17.5.20"
 
   handlers:
     - name: Recargar systemd daemon
