@@ -153,39 +153,11 @@
       pause:
         seconds: 20
 
-    - name: Verificar si alguna VIP está activa en este nodo (espera hasta 10s)
-      shell: |
-        for i in {1..5}; do
-          ip a | grep -E "inet\s+{{ api_vip }}/32" && exit 0
-          ip a | grep -E "inet\s+{{ second_vip }}/32" && exit 0
-          sleep 2
-        done
-        exit 1
-      register: vip_check
-      changed_when: false
-      failed_when: false
-
-    - name: Mostrar estado de verificación de VIPs
-      debug:
-        msg: "Resultado de vip_check.rc = {{ vip_check.rc }} en {{ inventory_hostname }}"
-
-    - name: Reiniciar HAProxy si alguna VIP está activa
+    - name: Iniciar o reiniciar HAProxy siempre (con soporte ip_nonlocal_bind)
       systemd:
         name: haproxy
         state: restarted
-      when: vip_check.rc == 0
-
-    - name: Habilitar HAProxy si alguna VIP está activa
-      systemd:
-        name: haproxy
         enabled: true
-      when: vip_check.rc == 0
-
-    - name: Habilitar HAProxy en nodos sin VIP (sin iniciar)
-      systemd:
-        name: haproxy
-        enabled: true
-      when: vip_check.rc != 0
 
   handlers:
     - name: Recargar systemd daemon
