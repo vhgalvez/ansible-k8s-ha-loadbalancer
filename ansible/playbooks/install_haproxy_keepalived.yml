@@ -9,6 +9,8 @@
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
     haproxy_socket_file: "/var/lib/haproxy/admin.sock"
+    api_vip: "10.17.5.10"
+    second_vip: "10.17.5.30"
 
   tasks:
     - name: Limpiar la caché de DNF
@@ -65,7 +67,7 @@
         group: haproxy
         mode: "0750"
 
-    - name: Habilitar bind a IPs no locales (net.ipv4.ip_nonlocal_bind)
+    - name: Habilitar bind a IPs no locales
       ansible.posix.sysctl:
         name: net.ipv4.ip_nonlocal_bind
         value: "1"
@@ -74,20 +76,20 @@
         state: present
       notify: Reiniciar Keepalived
 
-    - name: Restaurar contexto SELinux para el directorio del socket
+    - name: Restaurar contexto SELinux para el socket
       command: "restorecon -RFv {{ haproxy_socket_dir }}"
-      when: ansible_selinux.status == "enabled" and ansible_selinux.config_mode == "enforcing"
+      when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
       ignore_errors: true
       changed_when: false
 
-    - name: Establecer contexto SELinux para el socket de HAProxy
+    - name: Establecer contexto SELinux para el socket
       sefcontext:
         target: "{{ haproxy_socket_dir }}(/.*)?"
         setype: var_run_t
         state: present
-      when: ansible_selinux.status == "enabled" and ansible_selinux.config_mode == "enforcing"
+      when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
 
-    - name: Permitir a HAProxy conectarse a cualquier puerto (SELinux boolean)
+    - name: Permitir a HAProxy conectarse a cualquier puerto
       seboolean:
         name: haproxy_connect_any
         state: true
@@ -118,7 +120,7 @@
         content: |
           [Service]
           ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f {{ haproxy_config_dir }}/haproxy.cfg -p /run/haproxy.pid $OPTIONS
+          ExecStart=/usr/sbin/haproxy -Ws -f {{ haproxy_config_dir }}/haproxy.cfg -p /run/haproxy.pid
           RuntimeDirectory=haproxy
           RuntimeDirectoryMode=0750
           User=haproxy
@@ -146,15 +148,13 @@
       command: ip -4 route get 8.8.8.8
       register: default_route
       changed_when: false
-      failed_when: default_route.rc != 0
-      ignore_errors: false
 
-    - name: Definir interfaz para Keepalived (keepalived_interface)
+    - name: Definir interfaz para Keepalived
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
       when: default_route.stdout is defined and 'dev' in default_route.stdout
 
-    - name: Mostrar interfaz detectada para Keepalived
+    - name: Mostrar interfaz detectada
       debug:
         msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
 
@@ -177,18 +177,18 @@
         mode: "0644"
       notify: Validar y reiniciar HAProxy
 
-    - name: Habilitar y arrancar Keepalived
-      systemd:
-        name: keepalived
-        enabled: true
-        state: started
-      when: keepalived_interface is defined
+    - name: Verificar si VIP está activa
+      command: ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}"
+      register: vip_active
+      changed_when: false
+      ignore_errors: true
 
     - name: Habilitar e iniciar HAProxy
       systemd:
         name: haproxy
         enabled: true
         state: started
+      when: vip_active.rc == 0
 
   handlers:
     - name: Recargar systemd daemon
@@ -204,11 +204,12 @@
       block:
         - name: Validar configuración HAProxy
           command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
-          register: haproxy_config_check_handler
+          register: haproxy_config_check
           changed_when: false
+          ignore_errors: true
 
-        - name: Reiniciar HAProxy si la configuración es válida
+        - name: Reiniciar HAProxy si configuración válida
           systemd:
             name: haproxy
             state: restarted
-          when: haproxy_config_check_handler.rc == 0
+          when: haproxy_config_check.rc == 0
