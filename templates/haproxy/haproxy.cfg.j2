@@ -38,7 +38,7 @@ backend kubernetes_masters
     tcp-check connect port 6443
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['masters'] %}
-    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
+    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check fall 3 rise 2 inter 3s
     {% endfor %}
 
 # -----------------------------------------------------
@@ -55,9 +55,10 @@ backend ingress_http_servers
     mode http
     balance roundrobin
     option httpchk GET /healthz
-    default-server inter 5s fall 3 rise 2
+    http-check expect status 200
+    default-server inter 5s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
+    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check fall 3 rise 2 inter 5s
     {% endfor %}
 
 # -----------------------------------------------------
@@ -74,7 +75,7 @@ backend ingress_https_servers
     mode tcp
     balance roundrobin
     option ssl-hello-chk
-    default-server inter 5s fall 3 rise 2
+    default-server inter 5s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
+    server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check fall 3 rise 2 inter 5s
     {% endfor %}
