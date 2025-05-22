@@ -79,4 +79,3 @@ backend ingress_https_servers
     {% for host in groups['workers'] %}
     server worker-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check fall 3 rise 2 inter 5s
     {% endfor %}
-
