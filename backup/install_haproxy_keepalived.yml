@@ -1,0 +1,187 @@
+# ansible/playbooks/install_haproxy_keepalived.yml
+- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
+  hosts: haproxy_keepalived
+  become: true
+  vars:
+    haproxy_config_dir: "/etc/haproxy"
+    keepalived_config_dir: "/etc/keepalived"
+    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
+    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
+    haproxy_socket_dir: "/var/lib/haproxy"
+    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
+    api_vip: "10.17.5.10"
+    second_vip: "10.17.5.30"
+
+  tasks:
+    - name: Limpiar la caché de DNF
+      command: dnf clean all
+      changed_when: false
+
+    - name: Actualizar paquetes del sistema
+      command: dnf update -y
+      changed_when: false
+
+    - name: Verificar conectividad a internet
+      command: ping -c 3 8.8.8.8
+      register: ping_output
+      failed_when: ping_output.rc != 0
+      ignore_errors: true
+      changed_when: false
+
+    - name: Instalar paquetes requeridos
+      yum:
+        name:
+          - net-tools
+          - haproxy
+          - keepalived
+          - python3-dnf
+          - libselinux-python3
+        state: present
+
+    - name: Crear grupo y usuario haproxy
+      user:
+        name: haproxy
+        group: haproxy
+        shell: /sbin/nologin
+        system: yes
+        create_home: no
+        state: present
+
+    - name: Crear directorio del socket de HAProxy
+      file:
+        path: "{{ haproxy_socket_dir }}"
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: "0750"
+
+    - name: Habilitar net.ipv4.ip_nonlocal_bind
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: "1"
+        sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
+        reload: yes
+        state: present
+      notify: Reiniciar Keepalived
+
+    - name: Restaurar contexto SELinux del socket (si aplica)
+      command: "restorecon -RFv {{ haproxy_socket_dir }}"
+      when: ansible_selinux.status == "enabled" and ansible_selinux.mode == "enforcing"
+      ignore_errors: true
+      changed_when: false
+
+    - name: Crear directorio override de systemd para HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Crear override de systemd para HAProxy
+      copy:
+        dest: /etc/systemd/system/haproxy.service.d/override.conf
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+      notify: Recargar systemd daemon
+
+    - name: Crear directorios de configuración
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ haproxy_config_dir }}"
+        - "{{ keepalived_config_dir }}"
+
+    - name: Detectar interfaz principal
+      command: ip -4 route get 8.8.8.8
+      register: default_route
+      changed_when: false
+
+    - name: Definir interfaz para Keepalived
+      set_fact:
+        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
+
+    - name: Mostrar interfaz detectada
+      debug:
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
+
+    - name: Configurar Keepalived
+      template:
+        src: "{{ keepalived_config_template }}"
+        dest: "{{ keepalived_config_dir }}/keepalived.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reiniciar Keepalived
+
+    - name: Configurar HAProxy
+      template:
+        src: "{{ haproxy_config_template }}"
+        dest: "{{ haproxy_config_dir }}/haproxy.cfg"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Validar configuración HAProxy
+
+    - name: Esperar estabilización de Keepalived
+      pause:
+        seconds: 20
+
+    - name: Verificar si alguna VIP está activa en este nodo (espera hasta 10s)
+      shell: |
+        for i in {1..5}; do
+          ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ api_vip }}" && exit 0
+          ip -4 addr show dev {{ keepalived_interface }} | grep -q "{{ second_vip }}" && exit 0
+          sleep 2
+        done
+        exit 1
+      register: vip_check
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == "10.17.5.20"
+
+    - name: Reiniciar HAProxy si alguna VIP está activa
+      systemd:
+        name: haproxy
+        state: restarted
+      when:
+        - inventory_hostname == "10.17.5.20"
+        - vip_check.rc == 0
+
+    - name: Habilitar HAProxy si alguna VIP está activa
+      systemd:
+        name: haproxy
+        enabled: true
+      when:
+        - inventory_hostname == "10.17.5.20"
+        - vip_check.rc == 0
+
+    - name: Habilitar HAProxy en nodos backup (sin iniciar)
+      systemd:
+        name: haproxy
+        enabled: true
+      when: inventory_hostname != "10.17.5.20"
+
+  handlers:
+    - name: Recargar systemd daemon
+      systemd:
+        daemon_reload: true
+
+    - name: Reiniciar Keepalived
+      systemd:
+        name: keepalived
+        state: restarted
+
+    - name: Validar configuración HAProxy
+      command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
+      register: haproxy_config_check_result
+      changed_when: false
+      notify: Reiniciar HAProxy
+      ignore_errors: true
+
+    - name: Reiniciar HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
