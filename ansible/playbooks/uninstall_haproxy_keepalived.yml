@@ -4,28 +4,18 @@
   become: true
 
   tasks:
-    - name: Detener HAProxy si está activo
-      systemd:
-        name: haproxy
-        state: stopped
-      ignore_errors: true
-
-    - name: Detener Keepalived si está activo
-      systemd:
-        name: keepalived
-        state: stopped
-      ignore_errors: true
-
-    - name: Deshabilitar HAProxy
+    - name: Detener y deshabilitar HAProxy
       systemd:
         name: haproxy
         enabled: false
+        state: stopped
       ignore_errors: true
 
-    - name: Deshabilitar Keepalived
+    - name: Detener y deshabilitar Keepalived
       systemd:
         name: keepalived
         enabled: false
+        state: stopped
       ignore_errors: true
 
     - name: Eliminar archivos de configuración de HAProxy
@@ -38,12 +28,12 @@
         path: /etc/keepalived
         state: absent
 
-    - name: Eliminar sobreescritura de systemd de HAProxy
+    - name: Eliminar override systemd de HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: absent
 
-    - name: Eliminar unidad personalizada de HAProxy si existiera
+    - name: Eliminar unidad personalizada de HAProxy (si existiera)
       file:
         path: /etc/systemd/system/haproxy.service
         state: absent
@@ -61,6 +51,20 @@
         state: absent
       ignore_errors: true
 
+    - name: Eliminar archivo sysctl de ip_nonlocal_bind
+      file:
+        path: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
+        state: absent
+      ignore_errors: true
+
+    - name: Restaurar valores de sysctl por defecto
+      command: sysctl -w net.ipv4.ip_nonlocal_bind=0
+      ignore_errors: true
+
+    - name: Recargar sysctl
+      command: sysctl --system
+      ignore_errors: true
+
     - name: Desinstalar paquetes HAProxy y Keepalived
       yum:
         name:
@@ -68,17 +72,23 @@
           - keepalived
         state: absent
 
-    - name: Eliminar usuario haproxy
+    - name: Eliminar usuario haproxy (si existe)
       user:
         name: haproxy
         state: absent
+        remove: yes
       ignore_errors: true
 
-    - name: Eliminar grupo haproxy
+    - name: Eliminar grupo haproxy (si existe)
       group:
         name: haproxy
         state: absent
       ignore_errors: true
 
-    - name: Recargar systemd para aplicar cambios
+    - name: Recargar demonio systemd para aplicar limpieza
+      systemd:
+        daemon_reload: true
+
+    - name: Reejecutar systemd para reinicializar servicios (opcional)
       command: systemctl daemon-reexec
+      ignore_errors: true
