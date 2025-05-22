@@ -286,6 +286,33 @@ sudo systemctl status haproxy
 
 ---
 
+## 🧪 Estado de los Balanceadores tras el Playbook `install_haproxy_keepalived.yml`
+
+Este es el estado esperado de los nodos balanceadores una vez finaliza la instalación automática con Ansible. Todos los nodos tienen HAProxy + Keepalived configurados, y las VIPs se asignan automáticamente por prioridad.
+
+| Hostname        | IP           | Rol                                 | Keepalived         | HAProxy             | VIPs Activas                      |
+|-----------------|--------------|--------------------------------------|--------------------|---------------------|------------------------------------|
+| `k8s-api-lb`    | `10.17.5.20` | Nodo principal de VIPs (`priority=100`) | ✅ Activo (MASTER)  | ✅ Activo y corriendo | ✅ `10.17.5.10` y `10.17.5.30`      |
+| `loadbalancer1` | `10.17.3.12` | Respaldo 1 (`priority=120`)         | ✅ Activo (BACKUP)  | ✅ Activo (en espera) | ❌ (asumirá VIPs si el principal cae) |
+| `loadbalancer2` | `10.17.3.13` | Respaldo 2 (`priority=110`)         | ✅ Activo (BACKUP)  | ✅ Activo (en espera) | ❌ (asumirá VIPs si los anteriores caen) |
+
+---
+
+### ⚙️ Detalles técnicos
+
+- Todos los nodos tienen `HAProxy` habilitado y en ejecución (`enabled + running`).
+- Todos usan `ip_nonlocal_bind=1` para permitir el arranque sin poseer la VIP localmente.
+- Keepalived gestiona la flotación de las siguientes IPs virtuales:
+  - `10.17.5.10` → Kubernetes API (`6443`)
+  - `10.17.5.30` → Ingress HTTP/HTTPS (`80` y `443`)
+- El nodo que obtiene las VIPs es determinado por el archivo `host_vars/<ip>.yml` con sus prioridades:
+  - `keepalived_priority_api`
+  - `keepalived_priority_ingress`
+- Si el nodo principal falla, el siguiente en prioridad **asume automáticamente las VIPs** y el tráfico continúa sin interrupciones.
+
+---
+
+
 ## 🎯 Conclusión
 
 Con esta configuración:
