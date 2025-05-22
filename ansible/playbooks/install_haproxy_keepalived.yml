@@ -13,6 +13,7 @@
     second_vip: "10.17.5.30"
 
   tasks:
+
     - name: Limpiar la caché de DNF
       command: dnf clean all
       changed_when: false
@@ -70,6 +71,12 @@
       ignore_errors: true
       changed_when: false
 
+    - name: Crear directorio override de systemd para HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: "0755"
+
     - name: Crear override de systemd para HAProxy (corrige variable $CONFIG)
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
@@ -96,6 +103,10 @@
     - name: Definir interfaz para Keepalived
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
+
+    - name: Mostrar interfaz detectada
+      debug:
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface }}"
 
     - name: Configurar Keepalived
       template:
@@ -131,6 +142,7 @@
       when: vip_check.rc == 0
 
   handlers:
+
     - name: Recargar systemd daemon
       systemd:
         daemon_reload: true
