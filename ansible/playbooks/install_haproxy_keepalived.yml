@@ -69,14 +69,39 @@
             persistent: true
           when: ansible_selinux.status == "enabled"
 
-    - name: Habilitar net.ipv4.ip_nonlocal_bind
+    - name: Habilitar net.ipv4.ip_nonlocal_bind en sistemas no Flatcar
       ansible.posix.sysctl:
         name: net.ipv4.ip_nonlocal_bind
         value: "1"
         sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
         reload: yes
         state: present
+      when: ansible_distribution != "Flatcar Container Linux by Kinvolk"
       notify: Reiniciar Keepalived
+
+    - name: Habilitar ip_nonlocal_bind en Flatcar Container Linux (via systemd unit)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ip-nonlocal-bind.service
+        content: |
+          [Unit]
+          Description=Enable net.ipv4.ip_nonlocal_bind
+          Before=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/sysctl -w net.ipv4.ip_nonlocal_bind=1
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+      when: ansible_distribution == "Flatcar Container Linux by Kinvolk"
+
+    - name: Habilitar y arrancar ip-nonlocal-bind.service en Flatcar
+      ansible.builtin.systemd:
+        name: ip-nonlocal-bind.service
+        enabled: yes
+        state: started
+      when: ansible_distribution == "Flatcar Container Linux by Kinvolk"
 
     - name: Crear directorio override de systemd para HAProxy
       file:
