@@ -2,6 +2,7 @@
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
+  gather_facts: no
   vars:
     haproxy_config_dir: "/etc/haproxy"
     keepalived_config_dir: "/etc/keepalived"
@@ -13,12 +14,19 @@
     second_vip: "10.17.5.30"
 
   tasks:
-    - name: Limpiar la caché de DNF
-      command: dnf clean all
+    - name: Detectar si es Flatcar Container Linux
+      shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
+      register: is_flatcar
       changed_when: false
 
-    - name: Actualizar paquetes del sistema
+    - name: Limpiar la caché de DNF (si no es Flatcar)
+      command: dnf clean all
+      when: is_flatcar.stdout != 'true'
+      changed_when: false
+
+    - name: Actualizar paquetes del sistema (si no es Flatcar)
       command: dnf update -y
+      when: is_flatcar.stdout != 'true'
       changed_when: false
 
     - name: Verificar conectividad a internet
@@ -28,7 +36,7 @@
       ignore_errors: true
       changed_when: false
 
-    - name: Instalar paquetes requeridos
+    - name: Instalar paquetes requeridos (si no es Flatcar)
       package:
         name:
           - net-tools
@@ -37,6 +45,7 @@
           - python3-dnf
           - libselinux-python3
         state: present
+      when: is_flatcar.stdout != 'true'
 
     - name: Crear grupo y usuario haproxy
       user:
@@ -47,61 +56,48 @@
         create_home: no
         state: present
 
-    - name: Crear directorio del socket de HAProxy con permisos correctos y contexto SELinux
+    - name: Crear directorio del socket de HAProxy
+      file:
+        path: "{{ haproxy_socket_dir }}"
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: "0750"
+
+    - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
       block:
-        - name: Crear directorio del socket de HAProxy
-          file:
-            path: "{{ haproxy_socket_dir }}"
-            state: directory
-            owner: haproxy
-            group: haproxy
-            mode: "0750"
+        - name: Crear systemd unit para ip_nonlocal_bind
+          copy:
+            dest: /etc/systemd/system/ip-nonlocal-bind.service
+            content: |
+              [Unit]
+              Description=Enable net.ipv4.ip_nonlocal_bind
+              Before=network.target
 
-        - name: Restaurar contexto SELinux del socket (si aplica)
-          command: "restorecon -RFv {{ haproxy_socket_dir }}"
-          when: ansible_selinux.status == "enabled"
-          ignore_errors: true
+              [Service]
+              Type=oneshot
+              ExecStart=/usr/bin/sysctl -w net.ipv4.ip_nonlocal_bind=1
+              RemainAfterExit=yes
 
-        - name: Habilitar haproxy_connect_any en SELinux (si aplica)
-          seboolean:
-            name: haproxy_connect_any
-            state: true
-            persistent: true
-          when: ansible_selinux.status == "enabled"
+              [Install]
+              WantedBy=multi-user.target
 
-    - name: Habilitar net.ipv4.ip_nonlocal_bind
+        - name: Habilitar y arrancar ip-nonlocal-bind.service
+          systemd:
+            name: ip-nonlocal-bind.service
+            enabled: yes
+            state: started
+      when: is_flatcar.stdout == 'true'
+
+    - name: Habilitar net.ipv4.ip_nonlocal_bind (no Flatcar)
       ansible.posix.sysctl:
         name: net.ipv4.ip_nonlocal_bind
         value: "1"
         sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
         reload: yes
         state: present
-      when: ansible_distribution != "Flatcar Container Linux by Kinvolk"
+      when: is_flatcar.stdout != 'true'
       notify: Reiniciar Keepalived
-
-    - name: Habilitar ip_nonlocal_bind en Flatcar Container Linux (via systemd unit)
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/ip-nonlocal-bind.service
-        content: |
-          [Unit]
-          Description=Enable net.ipv4.ip_nonlocal_bind
-          Before=network.target
-
-          [Service]
-          Type=oneshot
-          ExecStart=/usr/bin/sysctl -w net.ipv4.ip_nonlocal_bind=1
-          RemainAfterExit=yes
-
-          [Install]
-          WantedBy=multi-user.target
-      when: ansible_distribution == "Flatcar Container Linux by Kinvolk"
-
-    - name: Habilitar y arrancar ip-nonlocal-bind.service
-      ansible.builtin.systemd:
-        name: ip-nonlocal-bind.service
-        enabled: yes
-        state: started
-      when: ansible_distribution == "Flatcar Container Linux by Kinvolk"
 
     - name: Crear directorio override de systemd para HAProxy
       file:
@@ -126,7 +122,7 @@
         state: directory
         mode: "0755"
 
-    - name: Crear override de systemd para Keepalived (solo After=haproxy)
+    - name: Crear override de systemd para Keepalived (After=haproxy)
       copy:
         dest: /etc/systemd/system/keepalived.service.d/override.conf
         content: |
@@ -178,7 +174,7 @@
       pause:
         seconds: 20
 
-    - name: Iniciar o reiniciar HAProxy siempre (con soporte ip_nonlocal_bind)
+    - name: Iniciar o reiniciar HAProxy
       systemd:
         name: haproxy
         state: restarted
