@@ -1,3 +1,5 @@
+# templates/haproxy/haproxy.cfg.j2
+
 # --------------------
 # Configuración Global
 # --------------------
@@ -79,3 +81,4 @@ backend ingress_https_servers
     {% for host in groups['workers'] %}
     server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
+
