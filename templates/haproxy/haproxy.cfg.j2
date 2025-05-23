@@ -4,7 +4,6 @@
 global
     log stdout format raw local0
     maxconn 4096
-    daemon
     stats socket {{ haproxy_socket_file }} mode 660 level admin expose-fd listeners
     user haproxy
     group haproxy
@@ -17,6 +16,7 @@ defaults
     log     global
     mode    tcp
     option  dontlognull
+    option  log-health-checks
     timeout connect 5s
     timeout client  50s
     timeout server  50s
@@ -36,7 +36,7 @@ backend kubernetes_masters
     balance roundrobin
     option tcp-check
     tcp-check connect port 6443
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['masters'] %}
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
     {% endfor %}
@@ -56,7 +56,7 @@ backend ingress_http_servers
     balance roundrobin
     option httpchk GET /healthz
     http-check expect status 200
-    default-server inter 5s fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
     server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
     {% endfor %}
@@ -75,7 +75,7 @@ backend ingress_https_servers
     mode tcp
     balance roundrobin
     option ssl-hello-chk
-    default-server inter 5s fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
     server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}

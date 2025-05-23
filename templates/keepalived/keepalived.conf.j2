@@ -16,7 +16,7 @@ vrrp_script chk_haproxy {
     rise 2
 }
 
-# VRRP Instance for Kubernetes API (Port 6443)
+# VRRP Instance for Kubernetes API (6443)
 vrrp_instance VI_API {
     state BACKUP
     interface {{ keepalived_interface }}
@@ -42,7 +42,7 @@ vrrp_instance VI_API {
     notify_fault  "/etc/keepalived/scripts/vip_fault.sh VI_API"
 }
 
-# VRRP Instance for Ingress Traffic (HTTP/HTTPS)
+# VRRP Instance for Ingress (80 + 443)
 vrrp_instance VI_INGRESS {
     state BACKUP
     interface {{ keepalived_interface }}
