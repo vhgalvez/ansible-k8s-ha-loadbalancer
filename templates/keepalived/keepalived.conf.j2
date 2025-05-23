@@ -32,7 +32,7 @@ vrrp_instance VI_API {
     }
 
     virtual_ipaddress {
-        {{ api_vip }}/32
+        {{ api_vip }}
     }
 
     track_script {
@@ -58,7 +58,7 @@ vrrp_instance VI_INGRESS {
     }
 
     virtual_ipaddress {
-        {{ second_vip }}/32
+        {{ second_vip }}
     }
 
     track_script {
