@@ -29,7 +29,7 @@
       changed_when: false
 
     - name: Instalar paquetes requeridos
-      yum:
+      package:
         name:
           - net-tools
           - haproxy
@@ -69,7 +69,7 @@
             persistent: true
           when: ansible_selinux.status == "enabled"
 
-    - name: Habilitar net.ipv4.ip_nonlocal_bind en sistemas no Flatcar
+    - name: Habilitar net.ipv4.ip_nonlocal_bind
       ansible.posix.sysctl:
         name: net.ipv4.ip_nonlocal_bind
         value: "1"
@@ -96,7 +96,7 @@
           WantedBy=multi-user.target
       when: ansible_distribution == "Flatcar Container Linux by Kinvolk"
 
-    - name: Habilitar y arrancar ip-nonlocal-bind.service en Flatcar
+    - name: Habilitar y arrancar ip-nonlocal-bind.service
       ansible.builtin.systemd:
         name: ip-nonlocal-bind.service
         enabled: yes
