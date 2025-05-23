@@ -327,7 +327,113 @@ Con esta configuración:
 
 ansible-galaxy collection install community.general
 
+🧰 Resumen del Proyecto: HAProxy + Keepalived para K3s HA
+Este proyecto implementa una solución de balanceo de carga altamente disponible para el acceso al clúster Kubernetes mediante HAProxy y Keepalived, gestionando múltiples VIPs (IP Virtuales) para separar tráfico crítico del API y del Ingress HTTP/HTTPS.
 
+🎯 Objetivo
+Garantizar:
+
+Acceso ininterrumpido al API de Kubernetes (puerto 6443).
+
+Disponibilidad continua para tráfico HTTP/HTTPS hacia los servicios internos (Ingress).
+
+Failover automático de las IPs virtuales entre múltiples nodos balanceadores.
+
+🔧 Componentes Clave
+Componente	Descripción
+HAProxy	Balanceador de carga TCP/HTTP para API y tráfico web
+Keepalived	Gestor de alta disponibilidad mediante VRRP para mover VIPs entre nodos
+VIPs	IPs flotantes que garantizan un único punto de entrada para el tráfico
+Ansible	Automatización completa del despliegue y configuración
+K3s	Clúster Kubernetes ligero y altamente disponible
+
+🌐 Arquitectura General de Red
+bash
+Copiar
+Editar
+                    ┌────────────────────────────┐
+                    │        Clientes externos    │
+                    └────────────┬───────────────┘
+                                 │
+                           ┌─────▼─────┐
+                           │ Cloudflare│
+                           └─────┬─────┘
+                                 │
+                       VPN / NAT / WireGuard
+                                 │
+                    ┌────────────▼────────────┐
+                    │  Load Balancer Principal│  <- VIPs: 10.17.5.10 / 10.17.5.30
+                    │   (HAProxy + Keepalived)│
+                    └────────────┬────────────┘
+              ┌─────────────────┴─────────────────┐
+              │                                   │
+     ┌────────▼────────┐               ┌──────────▼─────────┐
+     │  K3s Master #1  │               │  K3s Master #2-3    │
+     │ API + etcd      │◄─────────────► API + etcd           │
+     └─────────────────┘               └─────────────────────┘
+
+              │ Ingress tráfico HTTP/HTTPS via Traefik
+              ▼
+         ┌────────────┐
+         │  Workers   │
+         └────────────┘
+📦 VIPs y Tráfico
+Tipo de Tráfico	Puerto(s)	VIP	Destino final
+API de Kubernetes	6443	10.17.5.10	Nodos master de K3s (HA)
+Servicios Ingress	80 / 443	10.17.5.30	Nodos worker vía Traefik (interno)
+
+Las VIPs son asignadas dinámicamente al nodo con mayor prioridad activa.
+
+Si un nodo falla, Keepalived transfiere la VIP al siguiente disponible.
+
+🛠️ Mecanismo de Alta Disponibilidad
+HAProxy:
+
+Actúa como proxy TCP para 6443 y como proxy HTTP para 80/443.
+
+Verifica salud de los nodos K3s y trabajadores.
+
+Permite configuración nonlocal_bind para bindear IPs no locales.
+
+Keepalived:
+
+Ejecuta VRRP y scripts de tracking (estado de HAProxy).
+
+Usa prioridad para determinar nodo MASTER de las VIPs.
+
+Ejecuta vip_master.sh, vip_backup.sh, vip_fault.sh según evento.
+
+Ansible:
+
+Automatiza instalación en nodos HA.
+
+Configura todos los archivos .cfg, .service, .conf necesarios.
+
+Detecta Flatcar y aplica configuraciones especiales si es necesario.
+
+📑 Flujo de Implementación con Ansible
+Detecta distribución (Flatcar o no).
+
+Instala HAProxy, Keepalived y dependencias.
+
+Configura sysctl para permitir nonlocal_bind.
+
+Aplica configuraciones plantilladas (haproxy.cfg.j2, keepalived.conf.j2).
+
+Configura override de systemd para evitar dependencias circulares.
+
+Reinicia servicios y valida salud.
+
+✅ Ventajas Clave
+Alta disponibilidad real (failover automático).
+
+Separación de tráfico crítico.
+
+Escalabilidad horizontal simple.
+
+Configuración 100% automatizada y auditable (IaC).
+
+Seguridad de acceso por VPN y Cloudflare (si aplica).
 ---
 ansible-k8s-ha-loadbalancer/
 ├── ansible.cfg
@@ -347,3 +453,5 @@ ansible-k8s-ha-loadbalancer/
 ├── Makefile
 └── README.md
 ---
+
+

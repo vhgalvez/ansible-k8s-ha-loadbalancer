@@ -11,7 +11,6 @@
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/var/lib/haproxy"
     haproxy_socket_file: "/var/lib/haproxy/admin.sock"
-    haproxy_ssl_cert_file: "/etc/ssl/k8s/haproxy.pem"
     api_vip: "10.17.5.10"
     second_vip: "10.17.5.30"
 
@@ -65,14 +64,6 @@
         owner: haproxy
         group: haproxy
         mode: "0750"
-
-    - name: Copiar certificado TLS firmado por la CA de K3s
-      copy:
-        src: files/haproxy.pem
-        dest: "{{ haproxy_ssl_cert_file }}"
-        owner: haproxy
-        group: haproxy
-        mode: "0644"
 
     - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
       block:
