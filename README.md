@@ -455,3 +455,68 @@ ansible-k8s-ha-loadbalancer/
 ---
 
 
+
+
+🖥️ Tabla de Máquinas y Servicios
+Hostname	IP	Rol	Servicio	Estado Esperado	Comentario
+k8s-api-lb	10.17.5.20	Nodo principal de balanceo	haproxy	🟢 Activo	Nodo que debería mantener las VIPs activas (por prioridad más baja)
+keepalived	🟢 Activo (MASTER)	Controla VIPs 10.17.5.10 (API) y 10.17.5.30 (Ingress)
+loadbalancer1	10.17.3.12	Nodo de respaldo 1 de balanceo	haproxy	🟢 Activo	Nodo backup, asume VIPs si k8s-api-lb cae
+keepalived	🟢 Activo (BACKUP)	Se convierte en MASTER si el nodo principal falla
+loadbalancer2	10.17.3.13	Nodo de respaldo 2 de balanceo	haproxy	🟢 Activo	Segundo backup, entra si ambos anteriores fallan
+keepalived	🟢 Activo (BACKUP)	Estado pasivo, listo para asumir en caso de emergencia
+master1	10.17.4.21	Kubernetes API + etcd + bootstrap	k3s server	🟢 Activo	Primer nodo que inicia el cluster sin necesidad de VIP
+master2	10.17.4.22	Kubernetes API + etcd	k3s server	🟢 Activo	Se une al clúster vía IP real o API VIP
+master3	10.17.4.23	Kubernetes API + etcd	k3s server	🟢 Activo	Parte del quorum de etcd
+worker1	10.17.4.24	Nodo de aplicación	k3s agent	🟢 Activo	Recibe tráfico HTTP/HTTPS vía Traefik + VIP Ingress
+worker2	10.17.4.25	Nodo de aplicación	k3s agent	🟢 Activo	Balanceado por Traefik
+worker3	10.17.4.26	Nodo de aplicación	k3s agent	🟢 Activo	Balanceado por Traefik
+storage1	10.17.4.27	NFS + Longhorn	nfs-server	🟢 Activo	Montado como RWX (PostgreSQL, compartido) y RWO (Longhorn)
+infra-cluster	10.17.3.11	DNS (CoreDNS), NTP (Chrony)	dns, ntp	🟢 Activo	Servidor de infraestructura para sincronía y resolución interna
+postgresql1	10.17.3.14	Base de datos centralizada	postgresql	🟢 Activo	Puede estar montado en NFS compartido
+
+🎯 Comportamiento de Failover de Keepalived
+🧠 VIP 10.17.5.10 (API Server)
+Asignada por defecto al nodo k8s-api-lb
+
+Si este cae:
+
+loadbalancer1 detecta la caída y asume la IP VIP
+
+Si también cae, loadbalancer2 asume la IP
+
+➡️ El acceso al API (puerto 6443) sigue funcionando sin interrupciones para kubectl, etcd, y kubelet.
+
+🌐 VIP 10.17.5.30 (Ingress HTTP/HTTPS)
+También manejada por k8s-api-lb
+
+Redirige tráfico HTTP/HTTPS (puertos 80/443) hacia los pods (Traefik interno)
+
+Failover automático entre los tres balanceadores según prioridad
+
+➡️ El tráfico web externo es reenviado correctamente a través del Ingress aunque un nodo de balanceo falle.
+
+📊 Resumen de Estados Esperados
+Nodo	Servicio	Estado	Observaciones
+k8s-api-lb	haproxy	✅ corriendo	Posee ambas VIPs (por prioridad)
+keepalived	✅ corriendo	Estado MASTER
+loadbalancer1	haproxy	✅ corriendo	Espera en BACKUP
+keepalived	✅ corriendo	BACKUP con menor prioridad
+loadbalancer2	haproxy	✅ corriendo	Espera en BACKUP
+keepalived	✅ corriendo	BACKUP
+
+📦 Importante sobre HAProxy
+Requiere net.ipv4.ip_nonlocal_bind = 1 para aceptar conexiones en IPs VIP que no estén asignadas localmente.
+
+Se arranca incluso si la VIP no está disponible aún (por diseño de HA).
+
+Las configuraciones están correctamente desacopladas gracias al override systemd y After=haproxy.service.
+
+✅ Conclusiones
+Tu diseño es resiliente, modular y de alta disponibilidad real.
+
+El clúster no depende de las VIPs para arrancar, lo cual rompe el ciclo “huevo-gallina”.
+
+En caso de falla de cualquier balanceador, los otros asumen sin intervención humana.
+
+La infraestructura está lista para producción y escalamiento.

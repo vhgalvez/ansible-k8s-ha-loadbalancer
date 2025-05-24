@@ -181,6 +181,12 @@
         state: restarted
         enabled: true
 
+    - name: Iniciar o reiniciar Keepalived
+      systemd:
+        name: keepalived
+        state: restarted
+        enabled: true
+
   handlers:
     - name: Recargar systemd daemon
       systemd:
