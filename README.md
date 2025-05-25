@@ -12,7 +12,7 @@ Estás construyendo un entorno Kubernetes de alta disponibilidad sobre máquinas
 
 ## 🌐 Arquitectura de Red y Accesos Externos
 
-```
+```plaintext
 [Usuarios Públicos]
        │
        ▼
@@ -96,15 +96,15 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 
 **Longhorn (RWO):**
 
-* Microservicios
-* Prometheus
-* Grafana
-* ELK
+- Microservicios
+- Prometheus
+- Grafana
+- ELK
 
 **NFS (RWX):**
 
-* PostgreSQL → `/srv/nfs/postgresql`
-* Datos compartidos → `/srv/nfs/shared`
+- PostgreSQL → `/srv/nfs/postgresql`
+- Datos compartidos → `/srv/nfs/shared`
 
 ---
 
@@ -151,12 +151,12 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 
 ## ✅ Ventajas de esta Arquitectura
 
-* 🔁 Alta disponibilidad real con múltiples VIPs separadas.
-* 🚪 Ingress controlado internamente con Traefik.
-* 🛡️ Seguridad robusta por VPN, nftables y HTTPS.
-* 🧰 Automatización total (Terraform + Ansible).
-* 📦 Almacenamiento distribuido y tolerante a fallos.
-* 🧱 Modularidad para crecer sin rediseñar.
+- Alta disponibilidad real con múltiples VIPs separadas.
+- Ingress controlado internamente con Traefik.
+- Seguridad robusta por VPN, nftables y HTTPS.
+- Automatización total (Terraform + Ansible).
+- Almacenamiento distribuido y tolerante a fallos.
+- Modularidad para crecer sin rediseñar.
 
 sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_keepalived.yml
 
@@ -497,26 +497,25 @@ Failover automático entre los tres balanceadores según prioridad
 ➡️ El tráfico web externo es reenviado correctamente a través del Ingress aunque un nodo de balanceo falle.
 
 📊 Resumen de Estados Esperados
-Nodo	Servicio	Estado	Observaciones
-k8s-api-lb	haproxy	✅ corriendo	Posee ambas VIPs (por prioridad)
-keepalived	✅ corriendo	Estado MASTER
-loadbalancer1	haproxy	✅ corriendo	Espera en BACKUP
-keepalived	✅ corriendo	BACKUP con menor prioridad
-loadbalancer2	haproxy	✅ corriendo	Espera en BACKUP
-keepalived	✅ corriendo	BACKUP
 
-📦 Importante sobre HAProxy
-Requiere net.ipv4.ip_nonlocal_bind = 1 para aceptar conexiones en IPs VIP que no estén asignadas localmente.
+| Nodo            | Servicio    | Estado         | Observaciones                              |
+|-----------------|-------------|----------------|-------------------------------------------|
+| k8s-api-lb      | haproxy     | ✅ corriendo   | Posee ambas VIPs (por prioridad)          |
+|                 | keepalived  | ✅ corriendo   | Estado MASTER                             |
+| loadbalancer1   | haproxy     | ✅ corriendo   | Espera en BACKUP                          |
+|                 | keepalived  | ✅ corriendo   | BACKUP con menor prioridad                |
+| loadbalancer2   | haproxy     | ✅ corriendo   | Espera en BACKUP                          |
+|                 | keepalived  | ✅ corriendo   | BACKUP                                    |
 
-Se arranca incluso si la VIP no está disponible aún (por diseño de HA).
+## 📦 Importante sobre HAProxy
 
-Las configuraciones están correctamente desacopladas gracias al override systemd y After=haproxy.service.
+- Requiere `net.ipv4.ip_nonlocal_bind = 1` para aceptar conexiones en IPs VIP que no estén asignadas localmente.
+- Se arranca incluso si la VIP no está disponible aún (por diseño de HA).
+- Las configuraciones están correctamente desacopladas gracias al override systemd y `After=haproxy.service`.
 
-✅ Conclusiones
-Tu diseño es resiliente, modular y de alta disponibilidad real.
+## ✅ Conclusiones
 
-El clúster no depende de las VIPs para arrancar, lo cual rompe el ciclo “huevo-gallina”.
-
-En caso de falla de cualquier balanceador, los otros asumen sin intervención humana.
-
-La infraestructura está lista para producción y escalamiento.
+- Tu diseño es resiliente, modular y de alta disponibilidad real.
+- El clúster no depende de las VIPs para arrancar, lo cual rompe el ciclo “huevo-gallina”.
+- En caso de falla de cualquier balanceador, los otros asumen sin intervención humana.
+- La infraestructura está lista para producción y escalamiento.
