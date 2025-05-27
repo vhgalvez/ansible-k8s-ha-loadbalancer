@@ -180,6 +180,14 @@
         name: haproxy
         state: restarted
         enabled: true
+      register: haproxy_restart_result
+      ignore_errors: true
+      failed_when: false
+
+    - name: Mostrar resultado de reinicio HAProxy si falló
+      debug:
+        var: haproxy_restart_result
+      when: haproxy_restart_result.failed
 
     - name: Iniciar o reiniciar Keepalived
       systemd:
