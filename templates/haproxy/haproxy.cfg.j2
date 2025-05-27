@@ -10,6 +10,8 @@ global
     user haproxy
     group haproxy
     pidfile /run/haproxy.pid
+    daemon
+    master-worker
 
 # --------------------
 # Valores por defecto
@@ -22,6 +24,7 @@ defaults
     timeout connect 5s
     timeout client  50s
     timeout server  50s
+    option  accept-invalid-http-response
 
 # -------------------------------
 # Frontend para Kubernetes API
@@ -40,7 +43,7 @@ backend kubernetes_masters
     tcp-check connect port 6443
     default-server inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['masters'] %}
-    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
+    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check optional
     {% endfor %}
 
 # -----------------------------------------------------
@@ -49,18 +52,16 @@ backend kubernetes_masters
 # -----------------------------------------------------
 frontend http_ingress
     bind {{ second_vip }}:80
-    mode http
-    option httplog
+    mode tcp
+    option tcplog
     default_backend ingress_http_servers
 
 backend ingress_http_servers
-    mode http
+    mode tcp
     balance roundrobin
-    option httpchk GET /healthz
-    http-check expect status 200
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
+    server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check optional
     {% endfor %}
 
 # -----------------------------------------------------
@@ -79,6 +80,5 @@ backend ingress_https_servers
     option ssl-hello-chk
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
+    server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check optional
     {% endfor %}
-
