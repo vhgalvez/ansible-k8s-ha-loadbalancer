@@ -31,7 +31,7 @@ Estás construyendo un entorno Kubernetes de alta disponibilidad sobre máquinas
        ▼
 +-----------------------------+
 | WireGuard Server LAN       |
-| NAT + VPN (192.168.0.19)   |
+| NAT + VPN (192.168.0.20)   |
 +-----------------------------+
        │
        ▼
@@ -51,7 +51,7 @@ Estas IPs virtuales (VIP) son gestionadas por HAProxy + Keepalived y conmutan en
 
 | Nodo          | IP         | Función                |
 | ------------- | ---------- | ---------------------- |
-| k8s-api-lb    | 10.17.5.20 | Nodo principal de VIPs |
+| k8s-api-lb    | 192.168.0.30 | Nodo principal de VIPs con br0 puente|
 | loadbalancer1 | 10.17.3.12 | Respaldo HAProxy       |
 | loadbalancer2 | 10.17.3.13 | Respaldo HAProxy       |
 
@@ -141,7 +141,7 @@ El acceso es a través de la VIP `10.17.5.30` gestionada por HAProxy. Traefik se
 | worker2       | 10.17.4.25 | Nodo de aplicaciones        |
 | worker3       | 10.17.4.26 | Nodo de aplicaciones        |
 | storage1      | 10.17.4.27 | Longhorn + NFS              |
-| k8s-api-lb    | 10.17.5.20 | HAProxy + Keepalived (VIPs) |
+| k8s-api-lb    | 1192.168.0.30 | HAProxy + Keepalived (VIPs) |
 | loadbalancer1 | 10.17.3.12 | HAProxy (respaldo)          |
 | loadbalancer2 | 10.17.3.13 | HAProxy (respaldo)          |
 | postgresql1   | 10.17.3.14 | PostgreSQL centralizado     |
@@ -186,9 +186,12 @@ Permitir que el nodo `master1` pueda iniciar el clúster K3s sin depender previa
   * `10.17.4.24`, `10.17.4.25`, `10.17.4.26`, `10.17.4.27`
 * **Load Balancers**:
 
-  * `10.17.3.12`, `10.17.3.13`, `10.17.5.20`
+  * `10.17.3.12`, `10.17.3.13`, `192.168.0.30`
 
 ---
+
+
+k8s-api-lb 192.168.0.30 se crea un adaptador de puente `br0` para que los nodos puedan comunicarse entre sí y con el mundo exterior.
 
 ## 🔄 Orden de inicio esperado
 
@@ -292,7 +295,7 @@ Este es el estado esperado de los nodos balanceadores una vez finaliza la instal
 
 | Hostname        | IP           | Rol                                 | Keepalived         | HAProxy             | VIPs Activas                      |
 |-----------------|--------------|--------------------------------------|--------------------|---------------------|------------------------------------|
-| `k8s-api-lb`    | `10.17.5.20` | Nodo principal de VIPs (`priority=100`) | ✅ Activo (MASTER)  | ✅ Activo y corriendo | ✅ `10.17.5.10` y `10.17.5.30`      |
+| `k8s-api-lb`    | `192.168.0.30` | Nodo principal de VIPs (`priority=100`) | ✅ Activo (MASTER)  | ✅ Activo y corriendo | ✅ `10.17.5.10` y `10.17.5.30`      |
 | `loadbalancer1` | `10.17.3.12` | Respaldo 1 (`priority=120`)         | ✅ Activo (BACKUP)  | ✅ Activo (en espera) | ❌ (asumirá VIPs si el principal cae) |
 | `loadbalancer2` | `10.17.3.13` | Respaldo 2 (`priority=110`)         | ✅ Activo (BACKUP)  | ✅ Activo (en espera) | ❌ (asumirá VIPs si los anteriores caen) |
 
@@ -442,7 +445,7 @@ ansible-k8s-ha-loadbalancer/
 ├── host_vars/
 │   ├── 10.17.3.12.yml        # loadbalancer1
 │   ├── 10.17.3.13.yml        # loadbalancer2
-│   └── 10.17.5.20.yml        # k8s-api-lb (nodo principal)
+│   └── 192.168.0.30.yml        # k8s-api-lb (nodo principal)
 ├── playbooks/
 │   └── install_haproxy_keepalived.yml
 ├── templates/
@@ -459,7 +462,7 @@ ansible-k8s-ha-loadbalancer/
 
 🖥️ Tabla de Máquinas y Servicios
 Hostname	IP	Rol	Servicio	Estado Esperado	Comentario
-k8s-api-lb	10.17.5.20	Nodo principal de balanceo	haproxy	🟢 Activo	Nodo que debería mantener las VIPs activas (por prioridad más baja)
+k8s-api-lb	192.168.0.30	Nodo principal de balanceo	haproxy	🟢 Activo	Nodo que debería mantener las VIPs activas (por prioridad más baja)
 keepalived	🟢 Activo (MASTER)	Controla VIPs 10.17.5.10 (API) y 10.17.5.30 (Ingress)
 loadbalancer1	10.17.3.12	Nodo de respaldo 1 de balanceo	haproxy	🟢 Activo	Nodo backup, asume VIPs si k8s-api-lb cae
 keepalived	🟢 Activo (BACKUP)	Se convierte en MASTER si el nodo principal falla
