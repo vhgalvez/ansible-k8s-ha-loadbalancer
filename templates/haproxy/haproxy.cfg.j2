@@ -1,5 +1,4 @@
 # templates/haproxy/haproxy.cfg.j2
-
 # --------------------
 # Configuración Global HAProxy
 # --------------------
@@ -43,7 +42,7 @@ backend kubernetes_masters
     tcp-check connect port 6443
     default-server inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['masters'] %}
-    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check optional
+    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
     {% endfor %}
 
 # -----------------------------------------------------
@@ -61,7 +60,7 @@ backend ingress_http_servers
     balance roundrobin
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check optional
+    server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
     {% endfor %}
 
 # -----------------------------------------------------
@@ -80,5 +79,5 @@ backend ingress_https_servers
     option ssl-hello-chk
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
-    server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check optional
+    server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
