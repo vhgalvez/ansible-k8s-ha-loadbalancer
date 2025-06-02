@@ -41,9 +41,9 @@ backend kubernetes_masters
     option tcp-check
     tcp-check connect port 6443
     default-server inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['masters'] %}
+{% for host in groups['masters'] %}
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
-    {% endfor %}
+{% endfor %}
 
 # -----------------------------------------------------
 # Frontend HTTP (Ingress)
@@ -59,9 +59,9 @@ backend ingress_http_servers
     mode tcp
     balance roundrobin
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['workers'] %}
+{% for host in groups['workers'] %}
     server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
-    {% endfor %}
+{% endfor %}
 
 # -----------------------------------------------------
 # Frontend HTTPS (Ingress SSL Passthrough)
@@ -78,6 +78,6 @@ backend ingress_https_servers
     balance roundrobin
     option ssl-hello-chk
     default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['workers'] %}
+{% for host in groups['workers'] %}
     server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
-    {% endfor %}
+{% endfor %}
