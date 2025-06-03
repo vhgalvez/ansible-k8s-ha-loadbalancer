@@ -22,17 +22,17 @@
       ignore_errors: true
 
     # 2. Eliminar configuraciones y unidades systemd
-    - name: Eliminar archivos de configuración de HAProxy
+    - name: Eliminar configuración de HAProxy
       file:
         path: /etc/haproxy
         state: absent
 
-    - name: Eliminar archivos de configuración de Keepalived
+    - name: Eliminar configuración de Keepalived
       file:
         path: /etc/keepalived
         state: absent
 
-    - name: Eliminar directorio de scripts de notificación Keepalived
+    - name: Eliminar scripts de notificación de Keepalived
       file:
         path: /etc/keepalived/scripts
         state: absent
@@ -54,7 +54,7 @@
         path: /etc/systemd/system/keepalived.service.d
         state: absent
 
-    - name: Eliminar unidad personalizada de HAProxy (si existiera)
+    - name: Eliminar unidad personalizada de HAProxy (si existe)
       file:
         path: /etc/systemd/system/haproxy.service
         state: absent
@@ -72,14 +72,20 @@
         state: absent
       ignore_errors: true
 
-    # 3. Eliminar sockets y directorios
-    - name: Eliminar socket de administración de HAProxy
+    # 3. Eliminar sockets y directorios de ejecución
+    - name: Eliminar socket de administración HAProxy
       file:
-        path: /var/lib/haproxy/admin.sock
+        path: /run/haproxy/admin.sock
         state: absent
       ignore_errors: true
 
-    - name: Eliminar directorio del socket de HAProxy
+    - name: Eliminar directorio /run/haproxy
+      file:
+        path: /run/haproxy
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar directorio de estado de HAProxy (opcional)
       file:
         path: /var/lib/haproxy
         state: absent
@@ -91,7 +97,7 @@
       ignore_errors: true
 
     # 5. Desinstalar paquetes
-    - name: Desinstalar paquetes HAProxy y Keepalived
+    - name: Desinstalar HAProxy y Keepalived
       package:
         name:
           - haproxy
@@ -113,8 +119,8 @@
         state: absent
       ignore_errors: true
 
-    # 7. Limpieza final del entorno systemd
-    - name: Recargar systemd daemon para aplicar limpieza
+    # 7. Limpieza y recarga de systemd
+    - name: Recargar daemon de systemd
       systemd:
         daemon_reload: true
 
