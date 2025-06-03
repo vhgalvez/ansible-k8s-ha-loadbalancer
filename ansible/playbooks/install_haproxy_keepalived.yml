@@ -1,5 +1,4 @@
----
-# ansible/playbooks/install_haproxy_keepalived.yml
+# ansible\playbooks\install_haproxy_keepalived.yml
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
@@ -174,6 +173,17 @@
     - name: Esperar estabilización de Keepalived
       pause:
         seconds: 20
+
+    - name: Eliminar rutas estáticas configuradas manualmente
+      command: "ip route del {{ item }}"
+      with_items:
+        - "10.17.3.0/24"
+        - "10.17.4.0/24"
+        - "10.17.5.0/24"
+      register: result
+      changed_when: result.rc == 0
+      ignore_errors: true
+      failed_when: false
 
     - name: Eliminar socket HAProxy si existe
       file:
