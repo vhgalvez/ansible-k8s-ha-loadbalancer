@@ -1,109 +1,224 @@
 ---
-# ansible/playbooks/uninstall_haproxy_keepalived.yml
-- name: Desinstalar completamente HAProxy + Keepalived
+---
+# ansible/playbooks/install_haproxy_keepalived.yml
+- name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
+  gather_facts: no
+  vars:
+    haproxy_config_dir: "/etc/haproxy"
+    keepalived_config_dir: "/etc/keepalived"
+    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
+    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
+    haproxy_socket_dir: "/var/lib/haproxy"
+    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
+    api_vip: "10.17.5.10"
+    second_vip: "10.17.5.30"
 
   tasks:
-    - name: Detener y deshabilitar HAProxy
-      systemd:
-        name: haproxy
-        enabled: false
-        state: stopped
+    - name: Detectar si es Flatcar Container Linux
+      shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
+      register: is_flatcar
+      changed_when: false
+
+    - name: Limpiar la caché de DNF (si no es Flatcar)
+      command: dnf clean all
+      when: is_flatcar.stdout != 'true'
+      changed_when: false
+
+    - name: Actualizar paquetes del sistema (si no es Flatcar)
+      command: dnf update -y
+      when: is_flatcar.stdout != 'true'
+      changed_when: false
+
+    - name: Verificar conectividad a internet
+      command: ping -c 3 8.8.8.8
+      register: ping_output
+      failed_when: ping_output.rc != 0
       ignore_errors: true
+      changed_when: false
 
-    - name: Detener y deshabilitar Keepalived
-      systemd:
-        name: keepalived
-        enabled: false
-        state: stopped
-      ignore_errors: true
-
-    - name: Eliminar archivos de configuración de HAProxy
-      file:
-        path: /etc/haproxy
-        state: absent
-
-    - name: Eliminar archivos de configuración de Keepalived
-      file:
-        path: /etc/keepalived
-        state: absent
-
-    - name: Eliminar override systemd de HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar override systemd de Keepalived
-      file:
-        path: /etc/systemd/system/keepalived.service.d
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar unidad personalizada de HAProxy (si existiera)
-      file:
-        path: /etc/systemd/system/haproxy.service
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar socket de administración de HAProxy
-      file:
-        path: /var/lib/haproxy/admin.sock
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar directorio del socket de HAProxy
-      file:
-        path: /var/lib/haproxy
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar archivo sysctl de ip_nonlocal_bind
-      file:
-        path: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar unidad personalizada ip-nonlocal-bind (Flatcar)
-      file:
-        path: /etc/systemd/system/ip-nonlocal-bind.service
-        state: absent
-      ignore_errors: true
-
-    - name: Restaurar valores de sysctl por defecto
-      command: sysctl -w net.ipv4.ip_nonlocal_bind=0
-      ignore_errors: true
-
-    - name: Recargar configuración de sysctl
-      command: sysctl --system
-      ignore_errors: true
-
-    - name: Desinstalar paquetes HAProxy y Keepalived
-      yum:
+    - name: Instalar paquetes requeridos (si no es Flatcar)
+      package:
         name:
+          - net-tools
           - haproxy
           - keepalived
-        state: absent
-      ignore_errors: true
+          - python3-dnf
+          - libselinux-python3
+        state: present
+      when: is_flatcar.stdout != 'true'
 
-    - name: Eliminar usuario haproxy (si existe)
+    - name: Crear grupo y usuario haproxy
       user:
         name: haproxy
-        state: absent
-        remove: yes
-      ignore_errors: true
+        group: haproxy
+        shell: /sbin/nologin
+        system: yes
+        create_home: no
+        state: present
 
-    - name: Eliminar grupo haproxy (si existe)
-      group:
+    - name: Crear directorio del socket de HAProxy
+      file:
+        path: "{{ haproxy_socket_dir }}"
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: "0750"
+
+    - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
+      block:
+        - name: Crear systemd unit para ip_nonlocal_bind
+          copy:
+            dest: /etc/systemd/system/ip-nonlocal-bind.service
+            content: |
+              [Unit]
+              Description=Enable net.ipv4.ip_nonlocal_bind
+              Before=network.target
+
+              [Service]
+              Type=oneshot
+              ExecStart=/usr/bin/sysctl -w net.ipv4.ip_nonlocal_bind=1
+              RemainAfterExit=yes
+
+              [Install]
+              WantedBy=multi-user.target
+
+        - name: Habilitar y arrancar ip-nonlocal-bind.service
+          systemd:
+            name: ip-nonlocal-bind.service
+            enabled: yes
+            state: started
+      when: is_flatcar.stdout == 'true'
+
+    - name: Habilitar net.ipv4.ip_nonlocal_bind (no Flatcar)
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: "1"
+        sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
+        reload: yes
+        state: present
+      when: is_flatcar.stdout != 'true'
+      notify: Reiniciar Keepalived
+
+    - name: Crear directorio override de systemd para HAProxy
+      file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Crear override de systemd para HAProxy
+      copy:
+        dest: /etc/systemd/system/haproxy.service.d/override.conf
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+          Restart=always
+          RestartSec=3
+      notify: Recargar systemd daemon
+
+    - name: Crear directorio override de systemd para Keepalived
+      file:
+        path: /etc/systemd/system/keepalived.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Crear override de systemd para Keepalived (After=haproxy)
+      copy:
+        dest: /etc/systemd/system/keepalived.service.d/override.conf
+        content: |
+          [Unit]
+          After=haproxy.service
+      notify: Recargar systemd daemon
+
+    - name: Crear directorios de configuración
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ haproxy_config_dir }}"
+        - "{{ keepalived_config_dir }}"
+
+    - name: Detectar interfaz principal
+      command: ip -4 route get 8.8.8.8
+      register: default_route
+      changed_when: false
+
+    - name: Definir interfaz para Keepalived
+      set_fact:
+        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
+
+    - name: Mostrar interfaz detectada
+      debug:
+        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
+
+    - name: Configurar Keepalived
+      template:
+        src: "{{ keepalived_config_template }}"
+        dest: "{{ keepalived_config_dir }}/keepalived.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reiniciar Keepalived
+
+    - name: Configurar HAProxy
+      template:
+        src: "{{ haproxy_config_template }}"
+        dest: "{{ haproxy_config_dir }}/haproxy.cfg"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Validar configuración HAProxy
+
+    - name: Esperar estabilización de Keepalived
+      pause:
+        seconds: 20
+
+    - name: Eliminar socket HAProxy si existe
+      file:
+        path: "{{ haproxy_socket_file }}"
+        state: absent
+
+    - name: Iniciar o reiniciar HAProxy
+      systemd:
         name: haproxy
-        state: absent
+        state: restarted
+        enabled: true
+      register: haproxy_restart_result
       ignore_errors: true
+      failed_when: false
 
-    - name: Recargar demonio systemd para aplicar limpieza
+    - name: Mostrar resultado de reinicio HAProxy si falló
+      debug:
+        var: haproxy_restart_result
+      when: haproxy_restart_result.failed
+
+    - name: Iniciar o reiniciar Keepalived
+      systemd:
+        name: keepalived
+        state: restarted
+        enabled: true
+
+  handlers:
+    - name: Recargar systemd daemon
       systemd:
         daemon_reload: true
 
-    - name: Reejecutar systemd para reinicializar servicios
-      command: systemctl daemon-reexec
+    - name: Reiniciar Keepalived
+      systemd:
+        name: keepalived
+        state: restarted
+
+    - name: Validar configuración HAProxy
+      command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
+      register: haproxy_config_check_result
+      changed_when: false
+      notify: Reiniciar HAProxy
       ignore_errors: true
+
+    - name: Reiniciar HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
