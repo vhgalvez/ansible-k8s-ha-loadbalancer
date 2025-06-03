@@ -12,8 +12,8 @@
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
     haproxy_socket_dir: "/run/haproxy"
     haproxy_socket_file: "/run/haproxy/admin.sock"
-    api_vip: "10.17.5.10"
-    second_vip: "10.17.5.30"
+    api_vip: "10.17.4.30"
+    second_vip: "10.17.4.40"
     keepalived_auth_type: "PASS"
     keepalived_auth_pass: "12345678"
     haproxy_stats_enabled: true
