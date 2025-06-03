@@ -522,3 +522,9 @@ Failover automático entre los tres balanceadores según prioridad
 - El clúster no depende de las VIPs para arrancar, lo cual rompe el ciclo “huevo-gallina”.
 - En caso de falla de cualquier balanceador, los otros asumen sin intervención humana.
 - La infraestructura está lista para producción y escalamiento.
+
+# 📦 Instalación de HAProxy y Keepalived
+
+```bash
+sudo ansible-playbook playbooks/setup_haproxy_keepalived_full.yml -i inventory/hosts.ini+
+```
