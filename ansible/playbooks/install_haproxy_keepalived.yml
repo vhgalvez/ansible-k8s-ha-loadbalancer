@@ -21,6 +21,21 @@
       register: is_flatcar
       changed_when: false
 
+    - name: Instalar policycoreutils si SELinux está habilitado (solo RHEL-like)
+      package:
+        name: policycoreutils-python-utils
+        state: present
+      when: is_flatcar.stdout != 'true'
+
+    - name: Habilitar puertos SELinux para HAProxy (6443, 80, 443)
+      command: "semanage port -a -t http_port_t -p tcp {{ item }}"
+      with_items:
+        - 6443
+        - 80
+        - 443
+      ignore_errors: true
+      when: is_flatcar.stdout != 'true'
+
     - name: Limpiar la caché de DNF (si no es Flatcar)
       command: dnf clean all
       when: is_flatcar.stdout != 'true'
@@ -104,6 +119,8 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+          AmbientCapabilities=CAP_NET_BIND_SERVICE
+          CapabilityBoundingSet=CAP_NET_BIND_SERVICE
           Restart=always
           RestartSec=3
       notify: Recargar systemd daemon
