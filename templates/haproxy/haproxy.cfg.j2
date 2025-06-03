@@ -1,83 +1,95 @@
 # templates/haproxy/haproxy.cfg.j2
-# --------------------
-# Configuración Global HAProxy
-# --------------------
+# ================================
+# CONFIGURACIÓN GLOBAL DE HAProxy
+# ================================
+
 global
-    log stdout format raw local0
-    maxconn 4096
-    stats socket {{ haproxy_socket_file }} mode 660 level admin expose-fd listeners
+    log /dev/log local0                         # Registro del sistema (syslog)
+    log /dev/log local1 notice
+    daemon                                      # Ejecutar como daemon
+    maxconn 2048                               # Conexiones máximas
     user haproxy
     group haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     pidfile /run/haproxy.pid
-    daemon
-    master-worker
 
-# --------------------
-# Valores por defecto
-# --------------------
 defaults
     log     global
-    mode    tcp
+    mode    http                                # Por defecto HTTP (pero frontend puede cambiar)
+    option  httplog
     option  dontlognull
-    option  log-health-checks
     timeout connect 5s
-    timeout client  50s
-    timeout server  50s
+    timeout client  30s
+    timeout server  30s
+    errorfile 400 /etc/haproxy/errors/400.http
+    errorfile 403 /etc/haproxy/errors/403.http
+    errorfile 408 /etc/haproxy/errors/408.http
+    errorfile 500 /etc/haproxy/errors/500.http
+    errorfile 502 /etc/haproxy/errors/502.http
+    errorfile 503 /etc/haproxy/errors/503.http
+    errorfile 504 /etc/haproxy/errors/504.http
 
-# -------------------------------
-# Frontend para Kubernetes API
-# VIP: {{ api_vip }}:6443
-# -------------------------------
-frontend kubernetes_api
-    bind {{ api_vip }}:6443
+# ===============================================================
+# FRONTEND Y BACKEND PARA KUBERNETES API SERVER (VIP: {{ api_vip }}:6443)
+# ===============================================================
+frontend k8s_api
+    bind {{ api_vip }}:6443                    # Dirección IP virtual para el API server
     mode tcp
     option tcplog
-    default_backend kubernetes_masters
+    default_backend k8s_api_backend
 
-backend kubernetes_masters
+backend k8s_api_backend
     mode tcp
     balance roundrobin
     option tcp-check
-    tcp-check connect port 6443
-    default-server inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['masters'] %}
     server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
     {% endfor %}
 
-# -----------------------------------------------------
-# Frontend HTTP (Ingress)
-# VIP: {{ second_vip }}:80
-# -----------------------------------------------------
-frontend http_ingress
+# ===============================================================
+# FRONTEND Y BACKEND PARA INGRESO HTTP (VIP: {{ second_vip }}:80)
+# ===============================================================
+frontend ingress_http
     bind {{ second_vip }}:80
     mode tcp
     option tcplog
-    default_backend ingress_http_servers
+    default_backend ingress_http_backend
 
-backend ingress_http_servers
+backend ingress_http_backend
     mode tcp
     balance roundrobin
-    default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
+    option tcp-check
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
     server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
     {% endfor %}
 
-# -----------------------------------------------------
-# Frontend HTTPS (Ingress SSL Passthrough)
-# VIP: {{ second_vip }}:443
-# -----------------------------------------------------
-frontend https_ingress
+# ===============================================================
+# FRONTEND Y BACKEND PARA INGRESO HTTPS (VIP: {{ second_vip }}:443)
+# ===============================================================
+frontend ingress_https
     bind {{ second_vip }}:443
     mode tcp
     option tcplog
-    default_backend ingress_https_servers
+    default_backend ingress_https_backend
 
-backend ingress_https_servers
+backend ingress_https_backend
     mode tcp
     balance roundrobin
     option ssl-hello-chk
-    default-server inter 5s fall 2 rise 2 on-marked-down shutdown-sessions
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
     {% for host in groups['workers'] %}
     server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
     {% endfor %}
 
+# ===============================================================
+# INTERFAZ WEB DE ESTADÍSTICAS DE HAProxy (opcional)
+# ===============================================================
+listen stats
+    bind *:9000                                 # Cambia si deseas limitar a una IP específica
+    mode http
+    stats enable
+    stats uri /
+    stats refresh 10s
+    stats show-node

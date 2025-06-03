@@ -1,4 +1,5 @@
 # ansible\playbooks\install_haproxy_keepalived.yml
+---
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
@@ -16,11 +17,13 @@
     keepalived_auth_pass: "12345678"
 
   tasks:
+    # Detección del sistema operativo
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
       register: is_flatcar
       changed_when: false
 
+    # Instalación de dependencias para sistemas RHEL-like
     - name: Instalar policycoreutils si SELinux está habilitado (solo RHEL-like)
       package:
         name: policycoreutils-python-utils
@@ -64,6 +67,7 @@
         state: present
       when: is_flatcar.stdout != 'true'
 
+    # Usuario y directorios necesarios
     - name: Crear grupo y usuario haproxy
       user:
         name: haproxy
@@ -81,6 +85,7 @@
         group: root
         mode: "0755"
 
+    # Configuración para habilitar ip_nonlocal_bind (solo Flatcar)
     - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
       block:
         - name: Crear systemd unit para ip_nonlocal_bind
@@ -106,12 +111,7 @@
             state: started
       when: is_flatcar.stdout == 'true'
 
-    - name: Crear directorio override de systemd para HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: directory
-        mode: "0755"
-
+    # Overrides de systemd para HAProxy y Keepalived
     - name: Crear override de systemd para HAProxy
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
@@ -125,12 +125,6 @@
           RestartSec=3
       notify: Recargar systemd daemon
 
-    - name: Crear directorio override de systemd para Keepalived
-      file:
-        path: /etc/systemd/system/keepalived.service.d
-        state: directory
-        mode: "0755"
-
     - name: Crear override de systemd para Keepalived (After=haproxy)
       copy:
         dest: /etc/systemd/system/keepalived.service.d/override.conf
@@ -139,6 +133,7 @@
           After=haproxy.service
       notify: Recargar systemd daemon
 
+    # Crear directorios y aplicar plantillas
     - name: Crear directorios de configuración
       file:
         path: "{{ item }}"
