@@ -1,5 +1,4 @@
 ---
----
 # ansible/playbooks/install_haproxy_keepalived.yml
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
