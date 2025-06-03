@@ -15,6 +15,14 @@
     second_vip: "10.17.5.30"
     keepalived_auth_type: "PASS"
     keepalived_auth_pass: "12345678"
+    haproxy_stats_enabled: true
+    haproxy_stats_bind_address: "127.0.0.1"
+    haproxy_stats_port: 9000
+    haproxy_stats_uri: "/"
+    haproxy_stats_refresh: 10s
+    haproxy_stats_auth_user: "admin"
+    haproxy_stats_auth_pass: "changeme"
+
 
   tasks:
     - name: Detectar si es Flatcar Container Linux
