@@ -118,8 +118,8 @@
       when: is_flatcar.stdout == 'true'
 
     - name: 🛠️ Plantilla de override systemd para HAProxy
-      template:
-        src: templates/haproxy/haproxy-override.conf.j2
+      ansible.builtin.template:
+        src: "../../templates/haproxy/haproxy-override.conf.j2"
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         mode: '0644'
       notify:
