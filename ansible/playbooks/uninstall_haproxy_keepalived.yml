@@ -1,6 +1,6 @@
----
 # ansible/playbooks/uninstall_haproxy_keepalived.yml
-- name: Desinstalar completamente HAProxy + Keepalived
+---
+- name: 🔥 Desinstalar completamente HAProxy + Keepalived
   hosts: haproxy_keepalived
   become: true
 
@@ -31,6 +31,18 @@
       file:
         path: /etc/keepalived
         state: absent
+
+    - name: Eliminar directorio de scripts de notificación Keepalived
+      file:
+        path: /etc/keepalived/scripts
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar log de cambios de estado VIP
+      file:
+        path: /var/log/keepalived_vip.log
+        state: absent
+      ignore_errors: true
 
     - name: Eliminar override systemd de HAProxy
       file:
