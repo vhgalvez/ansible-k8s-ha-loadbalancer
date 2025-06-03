@@ -117,6 +117,12 @@
             state: started
       when: is_flatcar.stdout == 'true'
 
+    - name: 📁 Crear carpeta override para HAProxy en systemd
+      ansible.builtin.file:
+        path: /etc/systemd/system/haproxy.service.d
+        state: directory
+        mode: '0755'
+
     - name: 🛠️ Plantilla de override systemd para HAProxy
       ansible.builtin.template:
         src: "../../templates/haproxy/haproxy-override.conf.j2"
