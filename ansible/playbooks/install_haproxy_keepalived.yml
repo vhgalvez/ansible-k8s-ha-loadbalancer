@@ -1,9 +1,10 @@
-# ansible\playbooks\install_haproxy_keepalived.yml
+# ansible/playbooks/install_haproxy_keepalived.yml
 ---
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
   gather_facts: true
+
   vars:
     haproxy_config_dir: "/etc/haproxy"
     keepalived_config_dir: "/etc/keepalived"
@@ -118,19 +119,25 @@
       when: is_flatcar.stdout == 'true'
 
     - name: 📁 Crear carpeta override para HAProxy en systemd
-      ansible.builtin.file:
+      file:
         path: /etc/systemd/system/haproxy.service.d
         state: directory
         mode: '0755'
 
     - name: 🛠️ Plantilla de override systemd para HAProxy
-      ansible.builtin.template:
+      template:
         src: "../../templates/haproxy/haproxy-override.conf.j2"
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         mode: '0644'
       notify:
         - 🔄 Reload systemd
         - 🔁 Restart HAProxy
+
+    - name: 📁 Crear carpeta override para Keepalived en systemd
+      file:
+        path: /etc/systemd/system/keepalived.service.d
+        state: directory
+        mode: '0755'
 
     - name: Crear override systemd para Keepalived
       copy:
