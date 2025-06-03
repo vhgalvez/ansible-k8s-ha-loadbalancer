@@ -515,8 +515,13 @@ Failover automático entre los tres balanceadores según prioridad
 # 📦 Instalación de HAProxy y Keepalived
 
 ```bash
-sudo ansible-playbook ansible/playbooks/setup_haproxy_keepalived_full.yml -i inventory/hosts.ini
+sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/uninstall_haproxy_keepalived.yml
 ```
 
 
 
+
+
+```bash
+sudo ansible-playbook -i inventory/hosts.ini ansible/playbooks/install_haproxy_keepalived.yml
+```
