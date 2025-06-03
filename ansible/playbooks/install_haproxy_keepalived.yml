@@ -3,7 +3,7 @@
 - name: Instalar y Configurar HAProxy + Keepalived para Kubernetes API e Ingress
   hosts: haproxy_keepalived
   become: true
-  gather_facts: no
+  gather_facts: true
   vars:
     haproxy_config_dir: "/etc/haproxy"
     keepalived_config_dir: "/etc/keepalived"
@@ -17,44 +17,13 @@
     keepalived_auth_pass: "12345678"
 
   tasks:
+
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
       register: is_flatcar
       changed_when: false
 
-    - name: Instalar policycoreutils si SELinux está habilitado (solo RHEL-like)
-      package:
-        name: policycoreutils-python-utils
-        state: present
-      when: is_flatcar.stdout != 'true'
-
-    - name: Habilitar puertos SELinux para HAProxy (6443, 80, 443)
-      command: "semanage port -a -t http_port_t -p tcp {{ item }}"
-      with_items:
-        - 6443
-        - 80
-        - 443
-      ignore_errors: true
-      when: is_flatcar.stdout != 'true'
-
-    - name: Limpiar la caché de DNF (si no es Flatcar)
-      command: dnf clean all
-      when: is_flatcar.stdout != 'true'
-      changed_when: false
-
-    - name: Actualizar paquetes del sistema (si no es Flatcar)
-      command: dnf update -y
-      when: is_flatcar.stdout != 'true'
-      changed_when: false
-
-    - name: Verificar conectividad a internet
-      command: ping -c 3 8.8.8.8
-      register: ping_output
-      failed_when: ping_output.rc != 0
-      ignore_errors: true
-      changed_when: false
-
-    - name: Instalar paquetes requeridos (si no es Flatcar)
+    - name: Instalar paquetes necesarios en sistemas RHEL-like
       package:
         name:
           - net-tools
@@ -62,10 +31,20 @@
           - keepalived
           - python3-dnf
           - libselinux-python3
+          - policycoreutils-python-utils
         state: present
       when: is_flatcar.stdout != 'true'
 
-    - name: Crear grupo y usuario haproxy
+    - name: Habilitar puertos SELinux para HAProxy
+      command: semanage port -a -t http_port_t -p tcp {{ item }}
+      loop:
+        - 6443
+        - 80
+        - 443
+      ignore_errors: true
+      when: is_flatcar.stdout != 'true'
+
+    - name: Crear usuario y grupo haproxy si no existen
       user:
         name: haproxy
         group: haproxy
@@ -74,21 +53,18 @@
         create_home: no
         state: present
 
-    - name: Crear directorio del socket de HAProxy
+    - name: Crear directorios necesarios
       file:
-        path: "{{ haproxy_socket_dir }}"
+        path: "{{ item }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
-
-    - name: Crear directorio para páginas de error de HAProxy
-      file:
-        path: /etc/haproxy/errors
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+      loop:
+        - "{{ haproxy_config_dir }}"
+        - "{{ keepalived_config_dir }}"
+        - "{{ haproxy_socket_dir }}"
+        - "/etc/haproxy/errors"
 
     - name: Crear páginas de error estándar de HAProxy
       copy:
@@ -110,11 +86,10 @@
         - { code: '502', message: 'Bad Gateway' }
         - { code: '503', message: 'Service Unavailable' }
         - { code: '504', message: 'Gateway Timeout' }
-      tags: haproxy-errors
 
-    - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
+    - name: Configurar sysctl para net.ipv4.ip_nonlocal_bind en Flatcar
       block:
-        - name: Crear systemd unit para ip_nonlocal_bind
+        - name: Crear unidad systemd para ip_nonlocal_bind
           copy:
             dest: /etc/systemd/system/ip-nonlocal-bind.service
             content: |
@@ -129,21 +104,14 @@
 
               [Install]
               WantedBy=multi-user.target
-
-        - name: Habilitar y arrancar ip-nonlocal-bind.service
+        - name: Habilitar ip-nonlocal-bind.service
           systemd:
             name: ip-nonlocal-bind.service
             enabled: yes
             state: started
       when: is_flatcar.stdout == 'true'
 
-    - name: Crear directorio override de systemd para HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: directory
-        mode: "0755"
-
-    - name: Crear override de systemd para HAProxy
+    - name: Crear override systemd para HAProxy
       copy:
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         content: |
@@ -156,13 +124,7 @@
           RestartSec=3
       notify: Recargar systemd daemon
 
-    - name: Crear directorio override de systemd para Keepalived
-      file:
-        path: /etc/systemd/system/keepalived.service.d
-        state: directory
-        mode: "0755"
-
-    - name: Crear override de systemd para Keepalived (After=haproxy)
+    - name: Crear override systemd para Keepalived
       copy:
         dest: /etc/systemd/system/keepalived.service.d/override.conf
         content: |
@@ -170,16 +132,7 @@
           After=haproxy.service
       notify: Recargar systemd daemon
 
-    - name: Crear directorios de configuración
-      file:
-        path: "{{ item }}"
-        state: directory
-        mode: "0755"
-      loop:
-        - "{{ haproxy_config_dir }}"
-        - "{{ keepalived_config_dir }}"
-
-    - name: Detectar interfaz principal
+    - name: Detectar interfaz de red principal
       command: ip -4 route get 8.8.8.8
       register: default_route
       changed_when: false
@@ -188,33 +141,25 @@
       set_fact:
         keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
 
-    - name: Mostrar interfaz detectada
+    - name: Mostrar interfaz detectada para Keepalived
       debug:
-        msg: "Interfaz usada por Keepalived en {{ inventory_hostname }}: {{ keepalived_interface | default('No detectada') }}"
+        msg: "Interfaz usada: {{ keepalived_interface }}"
 
-    - name: Configurar Keepalived
+    - name: Plantilla de configuración Keepalived
       template:
         src: "{{ keepalived_config_template }}"
         dest: "{{ keepalived_config_dir }}/keepalived.conf"
-        owner: root
-        group: root
         mode: "0644"
       notify: Reiniciar Keepalived
 
-    - name: Configurar HAProxy
+    - name: Plantilla de configuración HAProxy
       template:
         src: "{{ haproxy_config_template }}"
         dest: "{{ haproxy_config_dir }}/haproxy.cfg"
-        owner: root
-        group: root
         mode: "0644"
       notify: Validar configuración HAProxy
 
-    - name: Esperar estabilización de Keepalived
-      pause:
-        seconds: 20
-
-    - name: Eliminar socket HAProxy si existe
+    - name: Borrar socket antiguo si existe
       file:
         path: "{{ haproxy_socket_file }}"
         state: absent
@@ -224,14 +169,6 @@
         name: haproxy
         state: restarted
         enabled: true
-      register: haproxy_restart_result
-      ignore_errors: true
-      failed_when: false
-
-    - name: Mostrar resultado de reinicio HAProxy si falló
-      debug:
-        var: haproxy_restart_result
-      when: haproxy_restart_result.failed
 
     - name: Iniciar o reiniciar Keepalived
       systemd:
@@ -244,11 +181,6 @@
       systemd:
         daemon_reload: true
 
-    - name: Reiniciar Keepalived
-      systemd:
-        name: keepalived
-        state: restarted
-
     - name: Validar configuración HAProxy
       command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
       register: haproxy_config_check_result
@@ -259,4 +191,9 @@
     - name: Reiniciar HAProxy
       systemd:
         name: haproxy
+        state: restarted
+
+    - name: Reiniciar Keepalived
+      systemd:
+        name: keepalived
         state: restarted
