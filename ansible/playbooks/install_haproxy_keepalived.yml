@@ -23,7 +23,6 @@
     haproxy_stats_auth_user: "admin"
     haproxy_stats_auth_pass: "changeme"
 
-
   tasks:
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
@@ -118,20 +117,14 @@
             state: started
       when: is_flatcar.stdout == 'true'
 
-    - name: Crear override systemd para HAProxy
-      copy:
+    - name: 🛠️ Plantilla de override systemd para HAProxy
+      template:
+        src: templates/haproxy/haproxy-override.conf.j2
         dest: /etc/systemd/system/haproxy.service.d/override.conf
-        content: |
-          [Service]
-          ExecStart=
-          ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
-          RuntimeDirectory=haproxy
-          RuntimeDirectoryMode=0755
-          AmbientCapabilities=CAP_NET_BIND_SERVICE
-          CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-          Restart=always
-          RestartSec=3
-      notify: Recargar systemd daemon
+        mode: '0644'
+      notify:
+        - 🔄 Reload systemd
+        - 🔁 Restart HAProxy
 
     - name: Crear override systemd para Keepalived
       copy:
@@ -139,7 +132,7 @@
         content: |
           [Unit]
           After=haproxy.service
-      notify: Recargar systemd daemon
+      notify: 🔄 Reload systemd
 
     - name: Detectar interfaz de red principal
       command: ip -4 route get 8.8.8.8
@@ -159,50 +152,42 @@
         src: "{{ keepalived_config_template }}"
         dest: "{{ keepalived_config_dir }}/keepalived.conf"
         mode: "0644"
-      notify: Reiniciar Keepalived
+      notify: 🔁 Restart Keepalived
 
     - name: Plantilla de configuración HAProxy
       template:
         src: "{{ haproxy_config_template }}"
         dest: "{{ haproxy_config_dir }}/haproxy.cfg"
         mode: "0644"
-      notify: Validar configuración HAProxy
+      notify: 🔍 Validar configuración HAProxy
 
     - name: Borrar socket antiguo si existe
       file:
         path: "{{ haproxy_socket_file }}"
         state: absent
 
-    - name: Iniciar o reiniciar HAProxy
-      systemd:
-        name: haproxy
-        state: restarted
-        enabled: true
-
-    - name: Iniciar o reiniciar Keepalived
-      systemd:
-        name: keepalived
-        state: restarted
-        enabled: true
-
   handlers:
-    - name: Recargar systemd daemon
-      systemd:
-        daemon_reload: true
+    - name: 🔄 Reload systemd
+      command: systemctl daemon-reload
+      become: true
 
-    - name: Validar configuración HAProxy
+    - name: 🔍 Validar configuración HAProxy
       command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
       register: haproxy_config_check_result
       changed_when: false
-      notify: Reiniciar HAProxy
+      notify: 🔁 Restart HAProxy
       ignore_errors: true
 
-    - name: Reiniciar HAProxy
+    - name: 🔁 Restart HAProxy
       systemd:
         name: haproxy
         state: restarted
+        enabled: true
+      become: true
 
-    - name: Reiniciar Keepalived
+    - name: 🔁 Restart Keepalived
       systemd:
         name: keepalived
         state: restarted
+        enabled: true
+      become: true
