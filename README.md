@@ -517,3 +517,6 @@ Failover automático entre los tres balanceadores según prioridad
 ```bash
 sudo ansible-playbook ansible/playbooks/setup_haproxy_keepalived_full.yml -i inventory/hosts.ini
 ```
+
+
+
