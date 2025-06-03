@@ -62,9 +62,9 @@
       file:
         path: "{{ haproxy_socket_dir }}"
         state: directory
-        owner: haproxy
-        group: haproxy
-        mode: "0750"
+        owner: root
+        group: root
+        mode: "0755"
 
     - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
       block:
@@ -90,16 +90,6 @@
             enabled: yes
             state: started
       when: is_flatcar.stdout == 'true'
-
-    - name: Habilitar net.ipv4.ip_nonlocal_bind (no Flatcar)
-      ansible.posix.sysctl:
-        name: net.ipv4.ip_nonlocal_bind
-        value: "1"
-        sysctl_file: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
-        reload: yes
-        state: present
-      when: is_flatcar.stdout != 'true'
-      notify: Reiniciar Keepalived
 
     - name: Crear directorio override de systemd para HAProxy
       file:
@@ -175,7 +165,6 @@
     - name: Esperar estabilización de Keepalived
       pause:
         seconds: 20
-
 
     - name: Eliminar socket HAProxy si existe
       file:
