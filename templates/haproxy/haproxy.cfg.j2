@@ -1,4 +1,4 @@
-# templates\haproxy\haproxy.cfg.j2
+# templates/haproxy/haproxy.cfg.j2
 # ================================
 # Configuración Global de HAProxy
 # ================================
@@ -25,9 +25,7 @@ defaults
     timeout server  60s
     retries 3
     option  http-server-close
-    option http-server-close
-    option forwardfor
-    spread-checks 3
+    option  forwardfor
     errorfile 400 /etc/haproxy/errors/400.http
     errorfile 403 /etc/haproxy/errors/403.http
     errorfile 408 /etc/haproxy/errors/408.http
