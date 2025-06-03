@@ -1,14 +1,16 @@
 # templates/keepalived/keepalived.conf.j2
-
-# -------------------------------
-# Keepalived Configuration
-# -------------------------------
+# ======================================
+# Configuración de Keepalived con VIPs con máscara correcta
+# ======================================
 
 global_defs {
     script_user root
     enable_script_security
 }
 
+# ================================
+# Script de salud para HAProxy
+# ================================
 vrrp_script chk_haproxy {
     script "/usr/bin/pidof haproxy"
     interval 2
@@ -18,7 +20,9 @@ vrrp_script chk_haproxy {
     rise 2
 }
 
-# VRRP Instance for Kubernetes API (6443)
+# =========================================
+# VRRP Instance: Kubernetes API (Puerto 6443)
+# =========================================
 vrrp_instance VI_API {
     state BACKUP
     interface {{ keepalived_interface }}
@@ -32,7 +36,7 @@ vrrp_instance VI_API {
     }
 
     virtual_ipaddress {
-        {{ api_vip }}
+        {{ api_vip }}/24 dev {{ keepalived_interface }}
     }
 
     track_script {
@@ -44,7 +48,9 @@ vrrp_instance VI_API {
     notify_fault  "/etc/keepalived/scripts/vip_fault.sh VI_API"
 }
 
-# VRRP Instance for Ingress (80 + 443)
+# ==========================================
+# VRRP Instance: Ingress HTTP/HTTPS (80/443)
+# ==========================================
 vrrp_instance VI_INGRESS {
     state BACKUP
     interface {{ keepalived_interface }}
@@ -58,7 +64,7 @@ vrrp_instance VI_INGRESS {
     }
 
     virtual_ipaddress {
-        {{ second_vip }}
+        {{ second_vip }}/24 dev {{ keepalived_interface }}
     }
 
     track_script {

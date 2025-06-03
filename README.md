@@ -31,7 +31,7 @@ Estás construyendo un entorno Kubernetes de alta disponibilidad sobre máquinas
        ▼
 +-----------------------------+
 | WireGuard Server LAN       |
-| NAT + VPN (192.168.0.20)   |
+| NAT + VPN (192.168.0.30)   |
 +-----------------------------+
        │
        ▼
