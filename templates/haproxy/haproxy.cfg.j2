@@ -1,21 +1,24 @@
 # templates/haproxy/haproxy.cfg.j2
-# ================================
-# CONFIGURACIÓN GLOBAL DE HAProxy
-# ================================
 
+# ================================
+# Configuración Global de HAProxy
+# ================================
 global
-    log /dev/log local0                         # Registro del sistema (syslog)
+    log /dev/log local0
     log /dev/log local1 notice
-    daemon                                      # Ejecutar como daemon
-    maxconn 2048                               # Conexiones máximas
+    daemon
+    maxconn 2048
     user haproxy
     group haproxy
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     pidfile /run/haproxy.pid
 
+# =========================
+# Configuración por defecto
+# =========================
 defaults
     log     global
-    mode    http                                # Por defecto HTTP (pero frontend puede cambiar)
+    mode    http
     option  httplog
     option  dontlognull
     timeout connect 5s
@@ -29,11 +32,11 @@ defaults
     errorfile 503 /etc/haproxy/errors/503.http
     errorfile 504 /etc/haproxy/errors/504.http
 
-# ===============================================================
-# FRONTEND Y BACKEND PARA KUBERNETES API SERVER (VIP: {{ api_vip }}:6443)
-# ===============================================================
+# ==================================
+# VIP 10.17.5.10 - API SERVER K3s
+# ==================================
 frontend k8s_api
-    bind {{ api_vip }}:6443                    # Dirección IP virtual para el API server
+    bind 10.17.5.10:6443
     mode tcp
     option tcplog
     default_backend k8s_api_backend
@@ -42,16 +45,16 @@ backend k8s_api_backend
     mode tcp
     balance roundrobin
     option tcp-check
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['masters'] %}
-    server master-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:6443 check
-    {% endfor %}
+    default-server inter 3s fall 3 rise 2
+    server master1 10.17.4.21:6443 check
+    server master2 10.17.4.22:6443 check
+    server master3 10.17.4.23:6443 check
 
-# ===============================================================
-# FRONTEND Y BACKEND PARA INGRESO HTTP (VIP: {{ second_vip }}:80)
-# ===============================================================
+# ==========================================
+# VIP 10.17.5.30 - INGRESS CONTROLLER HTTP
+# ==========================================
 frontend ingress_http
-    bind {{ second_vip }}:80
+    bind 10.17.5.30:80
     mode tcp
     option tcplog
     default_backend ingress_http_backend
@@ -60,16 +63,16 @@ backend ingress_http_backend
     mode tcp
     balance roundrobin
     option tcp-check
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['workers'] %}
-    server worker-http-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:80 check
-    {% endfor %}
+    default-server inter 3s fall 3 rise 2
+    server worker1 10.17.4.24:80 check
+    server worker2 10.17.4.25:80 check
+    server worker3 10.17.4.26:80 check
 
-# ===============================================================
-# FRONTEND Y BACKEND PARA INGRESO HTTPS (VIP: {{ second_vip }}:443)
-# ===============================================================
+# ===========================================
+# VIP 10.17.5.30 - INGRESS CONTROLLER HTTPS
+# ===========================================
 frontend ingress_https
-    bind {{ second_vip }}:443
+    bind 10.17.5.30:443
     mode tcp
     option tcplog
     default_backend ingress_https_backend
@@ -77,21 +80,20 @@ frontend ingress_https
 backend ingress_https_backend
     mode tcp
     balance roundrobin
-    option ssl-hello-chk
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    {% for host in groups['workers'] %}
-    server worker-https-{{ loop.index }} {{ hostvars[host]['ansible_host'] }}:443 check
-    {% endfor %}
+    option tcp-check
+    default-server inter 3s fall 3 rise 2
+    server worker1 10.17.4.24:443 check
+    server worker2 10.17.4.25:443 check
+    server worker3 10.17.4.26:443 check
 
-# ===============================================================
-# INTERFAZ WEB DE ESTADÍSTICAS DE HAProxy (opcional)
-# ===============================================================
+# ======================
+# STATS (opcional)
+# ======================
 listen stats
-    bind *:9000                                 # Cambia si deseas limitar a una IP específica
+    bind *:9000
     mode http
     stats enable
     stats uri /
     stats refresh 10s
     stats show-node
 
-    
