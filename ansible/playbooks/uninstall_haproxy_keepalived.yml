@@ -1,4 +1,4 @@
-# ansible\playbooks\uninstall_haproxy_keepalived.yml
+# ansible/playbooks/uninstall_haproxy_keepalived.yml
 - name: Desinstalar completamente HAProxy + Keepalived
   hosts: haproxy_keepalived
   become: true
@@ -32,6 +32,13 @@
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: absent
+      ignore_errors: true
+
+    - name: Eliminar override systemd de Keepalived
+      file:
+        path: /etc/systemd/system/keepalived.service.d
+        state: absent
+      ignore_errors: true
 
     - name: Eliminar unidad personalizada de HAProxy (si existiera)
       file:
@@ -57,11 +64,17 @@
         state: absent
       ignore_errors: true
 
+    - name: Eliminar unidad personalizada ip-nonlocal-bind (Flatcar)
+      file:
+        path: /etc/systemd/system/ip-nonlocal-bind.service
+        state: absent
+      ignore_errors: true
+
     - name: Restaurar valores de sysctl por defecto
       command: sysctl -w net.ipv4.ip_nonlocal_bind=0
       ignore_errors: true
 
-    - name: Recargar sysctl
+    - name: Recargar configuración de sysctl
       command: sysctl --system
       ignore_errors: true
 
@@ -71,6 +84,7 @@
           - haproxy
           - keepalived
         state: absent
+      ignore_errors: true
 
     - name: Eliminar usuario haproxy (si existe)
       user:
@@ -89,6 +103,6 @@
       systemd:
         daemon_reload: true
 
-    - name: Reejecutar systemd para reinicializar servicios (opcional)
+    - name: Reejecutar systemd para reinicializar servicios
       command: systemctl daemon-reexec
       ignore_errors: true
