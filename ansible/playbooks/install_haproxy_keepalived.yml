@@ -9,15 +9,14 @@
     keepalived_config_dir: "/etc/keepalived"
     haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
     keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
-    haproxy_socket_dir: "/var/lib/haproxy"
-    haproxy_socket_file: "/var/lib/haproxy/admin.sock"
+    haproxy_socket_dir: "/run/haproxy"
+    haproxy_socket_file: "/run/haproxy/admin.sock"
     api_vip: "10.17.5.10"
     second_vip: "10.17.5.30"
     keepalived_auth_type: "PASS"
     keepalived_auth_pass: "12345678"
 
   tasks:
-
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
       register: is_flatcar
@@ -118,6 +117,8 @@
           [Service]
           ExecStart=
           ExecStart=/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg -p /run/haproxy.pid
+          RuntimeDirectory=haproxy
+          RuntimeDirectoryMode=0755
           AmbientCapabilities=CAP_NET_BIND_SERVICE
           CapabilityBoundingSet=CAP_NET_BIND_SERVICE
           Restart=always
