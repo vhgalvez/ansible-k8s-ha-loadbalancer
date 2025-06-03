@@ -1,3 +1,4 @@
+---
 # ansible/playbooks/uninstall_haproxy_keepalived.yml
 - name: Desinstalar completamente HAProxy + Keepalived
   hosts: haproxy_keepalived
@@ -18,6 +19,7 @@
         state: stopped
       ignore_errors: true
 
+    # Eliminar configuraciones y overrides
     - name: Eliminar archivos de configuración de HAProxy
       file:
         path: /etc/haproxy
@@ -32,13 +34,11 @@
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: absent
-      ignore_errors: true
 
     - name: Eliminar override systemd de Keepalived
       file:
         path: /etc/systemd/system/keepalived.service.d
         state: absent
-      ignore_errors: true
 
     - name: Eliminar unidad personalizada de HAProxy (si existiera)
       file:
@@ -46,6 +46,19 @@
         state: absent
       ignore_errors: true
 
+    - name: Eliminar unidad personalizada ip-nonlocal-bind (Flatcar)
+      file:
+        path: /etc/systemd/system/ip-nonlocal-bind.service
+        state: absent
+      ignore_errors: true
+
+    - name: Eliminar archivo sysctl de ip_nonlocal_bind
+      file:
+        path: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
+        state: absent
+      ignore_errors: true
+
+    # Eliminar sockets y directorios
     - name: Eliminar socket de administración de HAProxy
       file:
         path: /var/lib/haproxy/admin.sock
@@ -58,34 +71,28 @@
         state: absent
       ignore_errors: true
 
-    - name: Eliminar archivo sysctl de ip_nonlocal_bind
-      file:
-        path: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar unidad personalizada ip-nonlocal-bind (Flatcar)
-      file:
-        path: /etc/systemd/system/ip-nonlocal-bind.service
-        state: absent
-      ignore_errors: true
-
+    # Restaurar valores del sistema
     - name: Restaurar valores de sysctl por defecto
-      command: sysctl -w net.ipv4.ip_nonlocal_bind=0
+      sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: "0"
+        state: present
       ignore_errors: true
 
-    - name: Recargar configuración de sysctl
+    - name: Recargar configuración sysctl
       command: sysctl --system
       ignore_errors: true
 
+    # Eliminar paquetes
     - name: Desinstalar paquetes HAProxy y Keepalived
-      yum:
+      package:
         name:
           - haproxy
           - keepalived
         state: absent
       ignore_errors: true
 
+    # Eliminar usuario y grupo
     - name: Eliminar usuario haproxy (si existe)
       user:
         name: haproxy
@@ -99,10 +106,20 @@
         state: absent
       ignore_errors: true
 
-    - name: Recargar demonio systemd para aplicar limpieza
+    # Limpieza final del entorno systemd
+    - name: Recargar systemd daemon para aplicar limpieza
       systemd:
         daemon_reload: true
 
     - name: Reejecutar systemd para reinicializar servicios
       command: systemctl daemon-reexec
+      ignore_errors: true
+
+    # Eliminar rutas estáticas (opcional según topología)
+    - name: Eliminar rutas estáticas configuradas manualmente
+      ansible.builtin.command: "ip route del {{ item }}"
+      with_items:
+        - "10.17.3.0/24"
+        - "10.17.4.0/24"
+        - "10.17.5.0/24"
       ignore_errors: true
