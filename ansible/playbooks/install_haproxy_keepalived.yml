@@ -12,6 +12,8 @@
     haproxy_socket_file: "/var/lib/haproxy/admin.sock"
     api_vip: "10.17.5.10"
     second_vip: "10.17.5.30"
+    keepalived_auth_type: "PASS"
+    keepalived_auth_pass: "12345678"
 
   tasks:
     - name: Detectar si es Flatcar Container Linux
@@ -174,16 +176,6 @@
       pause:
         seconds: 20
 
-    - name: Eliminar rutas estáticas configuradas manualmente
-      command: "ip route del {{ item }}"
-      with_items:
-        - "10.17.3.0/24"
-        - "10.17.4.0/24"
-        - "10.17.5.0/24"
-      register: result
-      changed_when: result.rc == 0
-      ignore_errors: true
-      failed_when: false
 
     - name: Eliminar socket HAProxy si existe
       file:

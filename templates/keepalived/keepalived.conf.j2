@@ -27,8 +27,8 @@ vrrp_instance VI_API {
     advert_int 1
 
     authentication {
-        auth_type PASS
-        auth_pass 12345678
+        auth_type {{ keepalived_auth_type }}
+        auth_pass {{ keepalived_auth_pass }}
     }
 
     virtual_ipaddress {
@@ -53,8 +53,8 @@ vrrp_instance VI_INGRESS {
     advert_int 1
 
     authentication {
-        auth_type PASS
-        auth_pass 12345678
+        auth_type {{ keepalived_auth_type }}
+        auth_pass {{ keepalived_auth_pass }}
     }
 
     virtual_ipaddress {

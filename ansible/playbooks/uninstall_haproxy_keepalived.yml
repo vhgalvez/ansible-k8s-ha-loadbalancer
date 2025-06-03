@@ -5,6 +5,8 @@
   become: true
 
   tasks:
+
+    # 1. Detener y deshabilitar servicios
     - name: Detener y deshabilitar HAProxy
       systemd:
         name: haproxy
@@ -19,7 +21,7 @@
         state: stopped
       ignore_errors: true
 
-    # Eliminar configuraciones y overrides
+    # 2. Eliminar configuraciones y unidades systemd
     - name: Eliminar archivos de configuración de HAProxy
       file:
         path: /etc/haproxy
@@ -58,7 +60,7 @@
         state: absent
       ignore_errors: true
 
-    # Eliminar sockets y directorios
+    # 3. Eliminar sockets y directorios
     - name: Eliminar socket de administración de HAProxy
       file:
         path: /var/lib/haproxy/admin.sock
@@ -71,19 +73,12 @@
         state: absent
       ignore_errors: true
 
-    # Restaurar valores del sistema
-    - name: Restaurar valores de sysctl por defecto
-      sysctl:
-        name: net.ipv4.ip_nonlocal_bind
-        value: "0"
-        state: present
-      ignore_errors: true
-
+    # 4. Recargar configuración del sistema
     - name: Recargar configuración sysctl
       command: sysctl --system
       ignore_errors: true
 
-    # Eliminar paquetes
+    # 5. Desinstalar paquetes
     - name: Desinstalar paquetes HAProxy y Keepalived
       package:
         name:
@@ -92,7 +87,7 @@
         state: absent
       ignore_errors: true
 
-    # Eliminar usuario y grupo
+    # 6. Eliminar usuario y grupo haproxy
     - name: Eliminar usuario haproxy (si existe)
       user:
         name: haproxy
@@ -106,20 +101,11 @@
         state: absent
       ignore_errors: true
 
-    # Limpieza final del entorno systemd
+    # 7. Limpieza final del entorno systemd
     - name: Recargar systemd daemon para aplicar limpieza
       systemd:
         daemon_reload: true
 
     - name: Reejecutar systemd para reinicializar servicios
       command: systemctl daemon-reexec
-      ignore_errors: true
-
-    # Eliminar rutas estáticas (opcional según topología)
-    - name: Eliminar rutas estáticas configuradas manualmente
-      ansible.builtin.command: "ip route del {{ item }}"
-      with_items:
-        - "10.17.3.0/24"
-        - "10.17.4.0/24"
-        - "10.17.5.0/24"
       ignore_errors: true
