@@ -82,7 +82,36 @@
         group: root
         mode: "0755"
 
-    # Habilitar ip_nonlocal_bind (Flatcar)
+    - name: Crear directorio para páginas de error de HAProxy
+      file:
+        path: /etc/haproxy/errors
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Crear páginas de error estándar de HAProxy
+      copy:
+        dest: "/etc/haproxy/errors/{{ item.code }}.http"
+        content: |
+          HTTP/1.0 {{ item.code }} {{ item.message }}
+          Content-Type: text/html
+
+          <html><body><h1>{{ item.code }} {{ item.message }}</h1>
+          <p>Lo sentimos, ocurrió un error {{ item.code }}.</p></body></html>
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - { code: '400', message: 'Bad Request' }
+        - { code: '403', message: 'Forbidden' }
+        - { code: '408', message: 'Request Timeout' }
+        - { code: '500', message: 'Internal Server Error' }
+        - { code: '502', message: 'Bad Gateway' }
+        - { code: '503', message: 'Service Unavailable' }
+        - { code: '504', message: 'Gateway Timeout' }
+      tags: haproxy-errors
+
     - name: Habilitar net.ipv4.ip_nonlocal_bind (Flatcar)
       block:
         - name: Crear systemd unit para ip_nonlocal_bind
@@ -108,7 +137,6 @@
             state: started
       when: is_flatcar.stdout == 'true'
 
-    # Overrides systemd para HAProxy
     - name: Crear directorio override de systemd para HAProxy
       file:
         path: /etc/systemd/system/haproxy.service.d
@@ -128,7 +156,6 @@
           RestartSec=3
       notify: Recargar systemd daemon
 
-    # Overrides systemd para Keepalived
     - name: Crear directorio override de systemd para Keepalived
       file:
         path: /etc/systemd/system/keepalived.service.d
