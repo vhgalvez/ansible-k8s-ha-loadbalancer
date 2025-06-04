@@ -5,6 +5,9 @@
   become: true
   gather_facts: true
 
+  vars_files:
+  - ../../group_vars/haproxy_keepalived.yml
+
   tasks:
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false

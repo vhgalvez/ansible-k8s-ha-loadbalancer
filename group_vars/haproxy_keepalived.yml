@@ -1,23 +1,23 @@
 # group_vars/haproxy_keepalived.yml
 
-# Interfaz física que usará Keepalived
+# Interfaz física usada por Keepalived
 keepalived_interface: eth1
 
-# Direcciones VIP
+# VIPs para HA
 api_vip: "10.17.5.10"
 second_vip: "10.17.5.30"
 
-# Autenticación de Keepalived
+# Autenticación para Keepalived
 keepalived_auth_type: "PASS"
 keepalived_auth_pass: "12345678"
 
-# Rutas de configuración y plantillas
+# Rutas y plantillas de configuración
 haproxy_config_dir: "/etc/haproxy"
 keepalived_config_dir: "/etc/keepalived"
 haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
 keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
 
-# Socket de administración de HAProxy
+# Configuración del socket de administración de HAProxy
 haproxy_socket_dir: "/run/haproxy"
 haproxy_socket_file: "/run/haproxy/admin.sock"
 
