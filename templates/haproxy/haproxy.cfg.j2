@@ -1,9 +1,7 @@
 # templates/haproxy/haproxy.cfg.j2
-# ==============================================
-# HAProxy Configuration for Kubernetes Cluster
-# Supports VIPs: API (6443) and Ingress (80/443)
-# ==============================================
-
+# ================================
+# Configuración Global de HAProxy
+# ================================
 global
     log /dev/log local0
     log /dev/log local1 notice
@@ -11,9 +9,12 @@ global
     maxconn 4096
     user haproxy
     group haproxy
-    pidfile /run/haproxy.pid
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    pidfile /run/haproxy.pid
 
+# =========================
+# Configuración por defecto
+# =========================
 defaults
     log     global
     mode    tcp
@@ -33,7 +34,9 @@ defaults
     errorfile 503 /etc/haproxy/errors/503.http
     errorfile 504 /etc/haproxy/errors/504.http
 
-# Kubernetes API (VIP)
+# ============================================
+# VIP {{ api_vip }} - API SERVER Kubernetes (6443)
+# ============================================
 frontend k8s_api
     bind {{ api_vip }}:6443 transparent
     mode tcp
@@ -49,7 +52,9 @@ backend k8s_api_backend
     server {{ host }} {{ host }}:6443 check
 {% endfor %}
 
-# Ingress HTTP (VIP)
+# ==========================================
+# VIP {{ second_vip }} - INGRESS CONTROLLER HTTP
+# ==========================================
 frontend ingress_http
     bind {{ second_vip }}:80 transparent
     mode tcp
@@ -65,7 +70,9 @@ backend ingress_http_backend
     server {{ host }} {{ host }}:80 check
 {% endfor %}
 
-# Ingress HTTPS (VIP)
+# ===========================================
+# VIP {{ second_vip }} - INGRESS CONTROLLER HTTPS
+# ===========================================
 frontend ingress_https
     bind {{ second_vip }}:443 transparent
     mode tcp
@@ -81,7 +88,9 @@ backend ingress_https_backend
     server {{ host }} {{ host }}:443 check
 {% endfor %}
 
-# Opcional: Panel de Stats
+# ======================
+# Interfaz de estadísticas (opcional)
+# ======================
 {% if haproxy_stats_enabled %}
 listen stats
     bind {{ haproxy_stats_bind_address }}:{{ haproxy_stats_port }}
