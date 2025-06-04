@@ -1,7 +1,9 @@
 # templates/haproxy/haproxy.cfg.j2
-# ================================
-# Configuración Global de HAProxy
-# ================================
+# ==============================================
+# HAProxy Configuration for Kubernetes Cluster
+# Supports VIPs: API (6443) and Ingress (80/443)
+# ==============================================
+
 global
     log /dev/log local0
     log /dev/log local1 notice
@@ -9,12 +11,9 @@ global
     maxconn 4096
     user haproxy
     group haproxy
-    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     pidfile /run/haproxy.pid
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
 
-# =========================
-# Configuración por defecto
-# =========================
 defaults
     log     global
     mode    tcp
@@ -34,9 +33,10 @@ defaults
     errorfile 503 /etc/haproxy/errors/503.http
     errorfile 504 /etc/haproxy/errors/504.http
 
-# ============================================
-# VIP {{ api_vip }} - API SERVER Kubernetes (6443)
-# ============================================
+# =========================================
+# Kubernetes API Server Load Balancer (6443)
+# VIP: {{ api_vip }}
+# =========================================
 frontend k8s_api
     bind {{ api_vip }}:6443 transparent
     mode tcp
@@ -52,9 +52,10 @@ backend k8s_api_backend
     server {{ host }} {{ host }}:6443 check
 {% endfor %}
 
-# ==========================================
-# VIP {{ second_vip }} - INGRESS CONTROLLER HTTP
-# ==========================================
+# =========================================
+# Ingress Controller HTTP (80)
+# VIP: {{ second_vip }}
+# =========================================
 frontend ingress_http
     bind {{ second_vip }}:80 transparent
     mode tcp
@@ -70,9 +71,10 @@ backend ingress_http_backend
     server {{ host }} {{ host }}:80 check
 {% endfor %}
 
-# ===========================================
-# VIP {{ second_vip }} - INGRESS CONTROLLER HTTPS
-# ===========================================
+# =========================================
+# Ingress Controller HTTPS (443)
+# VIP: {{ second_vip }}
+# =========================================
 frontend ingress_https
     bind {{ second_vip }}:443 transparent
     mode tcp
@@ -88,9 +90,9 @@ backend ingress_https_backend
     server {{ host }} {{ host }}:443 check
 {% endfor %}
 
-# ======================
-# Interfaz de estadísticas (opcional)
-# ======================
+# ================================
+# Optional: HAProxy Stats Interface
+# ================================
 {% if haproxy_stats_enabled %}
 listen stats
     bind {{ haproxy_stats_bind_address }}:{{ haproxy_stats_port }}
@@ -101,5 +103,4 @@ listen stats
     stats show-node
     stats auth {{ haproxy_stats_auth_user }}:{{ haproxy_stats_auth_pass }}
 {% endif %}
-
 
