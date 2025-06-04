@@ -1,3 +1,4 @@
+# ansible\playbooks\setup_haproxy_keepalived_full.yml
 ---
 - name: "Playbook maestro: Instalar HAProxy + Keepalived + Scripts de Notificación"
   import_playbook: create_keepalived_notify_scripts.yml
