@@ -5,26 +5,8 @@
   become: true
   gather_facts: true
 
-  vars:
-    haproxy_config_dir: "/etc/haproxy"
-    keepalived_config_dir: "/etc/keepalived"
-    haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
-    keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
-    haproxy_socket_dir: "/run/haproxy"
-    haproxy_socket_file: "/run/haproxy/admin.sock"
-    api_vip: "10.17.5.10"
-    second_vip: "10.17.5.30"
-    keepalived_auth_type: "PASS"
-    keepalived_auth_pass: "12345678"
-    haproxy_stats_enabled: true
-    haproxy_stats_bind_address: "127.0.0.1"
-    haproxy_stats_port: 9000
-    haproxy_stats_uri: "/"
-    haproxy_stats_refresh: 10s
-    haproxy_stats_auth_user: "admin"
-    haproxy_stats_auth_pass: "changeme"
-    keepalived_interface: eth1
-
+  vars_files:
+    - group_vars/haproxy_keepalived.yml
 
   tasks:
     - name: Detectar si es Flatcar Container Linux
@@ -86,51 +68,27 @@
           <p>Lo sentimos, ocurrió un error {{ item.code }}.</p></body></html>
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
       loop:
-        - { code: '400', message: 'Bad Request' }
-        - { code: '403', message: 'Forbidden' }
-        - { code: '408', message: 'Request Timeout' }
-        - { code: '500', message: 'Internal Server Error' }
-        - { code: '502', message: 'Bad Gateway' }
-        - { code: '503', message: 'Service Unavailable' }
-        - { code: '504', message: 'Gateway Timeout' }
-
-    - name: Configurar sysctl para net.ipv4.ip_nonlocal_bind en Flatcar
-      block:
-        - name: Crear unidad systemd para ip_nonlocal_bind
-          copy:
-            dest: /etc/systemd/system/ip-nonlocal-bind.service
-            content: |
-              [Unit]
-              Description=Enable net.ipv4.ip_nonlocal_bind
-              Before=network.target
-
-              [Service]
-              Type=oneshot
-              ExecStart=/usr/bin/sysctl -w net.ipv4.ip_nonlocal_bind=1
-              RemainAfterExit=yes
-
-              [Install]
-              WantedBy=multi-user.target
-        - name: Habilitar ip-nonlocal-bind.service
-          systemd:
-            name: ip-nonlocal-bind.service
-            enabled: yes
-            state: started
-      when: is_flatcar.stdout == 'true'
+        - { code: "400", message: "Bad Request" }
+        - { code: "403", message: "Forbidden" }
+        - { code: "408", message: "Request Timeout" }
+        - { code: "500", message: "Internal Server Error" }
+        - { code: "502", message: "Bad Gateway" }
+        - { code: "503", message: "Service Unavailable" }
+        - { code: "504", message: "Gateway Timeout" }
 
     - name: 📁 Crear carpeta override para HAProxy en systemd
       file:
         path: /etc/systemd/system/haproxy.service.d
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: 🛠️ Plantilla de override systemd para HAProxy
       template:
         src: "../../templates/haproxy/haproxy-override.conf.j2"
         dest: /etc/systemd/system/haproxy.service.d/override.conf
-        mode: '0644'
+        mode: "0644"
       notify:
         - 🔄 Reload systemd
         - 🔁 Restart HAProxy
@@ -139,7 +97,7 @@
       file:
         path: /etc/systemd/system/keepalived.service.d
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Crear override systemd para Keepalived
       copy:
