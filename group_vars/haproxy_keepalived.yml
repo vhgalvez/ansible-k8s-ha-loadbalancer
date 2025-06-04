@@ -1,24 +1,31 @@
-# group_vars\haproxy_keepalived.yml
+# group_vars/haproxy_keepalived.yml - Variables para HAProxy + Keepalived
 
+# 🧩 Interfaz de red para Keepalived
 keepalived_interface: eth1
 
+# 🌐 IPs Virtuales (VIPs) para balanceo de API y tráfico Ingress
 api_vip: "10.17.5.10"
 second_vip: "10.17.5.30"
 
+# 🔐 Autenticación de Keepalived
 keepalived_auth_type: "PASS"
 keepalived_auth_pass: "12345678"
 
+# 🗂️ Rutas de configuración y plantillas
 haproxy_config_dir: "/etc/haproxy"
 keepalived_config_dir: "/etc/keepalived"
 haproxy_config_template: "../../templates/haproxy/haproxy.cfg.j2"
 keepalived_config_template: "../../templates/keepalived/keepalived.conf.j2"
+
+# 🔌 Configuración del socket de administración de HAProxy
 haproxy_socket_dir: "/run/haproxy"
 haproxy_socket_file: "/run/haproxy/admin.sock"
 
+# 📊 Panel de estadísticas de HAProxy
 haproxy_stats_enabled: true
 haproxy_stats_bind_address: "127.0.0.1"
 haproxy_stats_port: 9000
 haproxy_stats_uri: "/"
-haproxy_stats_refresh: 10s
+haproxy_stats_refresh: "10s"
 haproxy_stats_auth_user: "admin"
 haproxy_stats_auth_pass: "changeme"

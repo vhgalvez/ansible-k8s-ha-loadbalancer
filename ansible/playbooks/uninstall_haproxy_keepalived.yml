@@ -1,129 +1,50 @@
 # ansible/playbooks/uninstall_haproxy_keepalived.yml
 ---
-- name: 🔥 Desinstalar completamente HAProxy + Keepalived
+- name: Desinstalar HAProxy + Keepalived y limpiar configuración
   hosts: haproxy_keepalived
   become: true
+  gather_facts: true
 
   tasks:
-
-    # 1. Detener y deshabilitar servicios
     - name: Detener y deshabilitar HAProxy
       systemd:
         name: haproxy
-        enabled: false
         state: stopped
+        enabled: false
       ignore_errors: true
 
     - name: Detener y deshabilitar Keepalived
       systemd:
         name: keepalived
-        enabled: false
         state: stopped
+        enabled: false
       ignore_errors: true
 
-    # 2. Eliminar configuraciones y unidades systemd
     - name: Eliminar configuración de HAProxy
       file:
-        path: /etc/haproxy
+        path: "{{ item }}"
         state: absent
+      loop:
+        - "{{ haproxy_config_dir }}"
+        - "{{ haproxy_socket_file }}"
+        - /etc/systemd/system/haproxy.service.d
 
     - name: Eliminar configuración de Keepalived
       file:
-        path: /etc/keepalived
+        path: "{{ item }}"
         state: absent
+      loop:
+        - "{{ keepalived_config_dir }}"
+        - /etc/systemd/system/keepalived.service.d
 
-    - name: Eliminar scripts de notificación de Keepalived
-      file:
-        path: /etc/keepalived/scripts
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar log de cambios de estado VIP
-      file:
-        path: /var/log/keepalived_vip.log
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar override systemd de HAProxy
-      file:
-        path: /etc/systemd/system/haproxy.service.d
-        state: absent
-
-    - name: Eliminar override systemd de Keepalived
-      file:
-        path: /etc/systemd/system/keepalived.service.d
-        state: absent
-
-    - name: Eliminar unidad personalizada de HAProxy (si existe)
-      file:
-        path: /etc/systemd/system/haproxy.service
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar unidad personalizada ip-nonlocal-bind (Flatcar)
-      file:
-        path: /etc/systemd/system/ip-nonlocal-bind.service
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar archivo sysctl de ip_nonlocal_bind
-      file:
-        path: /etc/sysctl.d/99-haproxy-nonlocal-bind.conf
-        state: absent
-      ignore_errors: true
-
-    # 3. Eliminar sockets y directorios de ejecución
-    - name: Eliminar socket de administración HAProxy
-      file:
-        path: /run/haproxy/admin.sock
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar directorio /run/haproxy
-      file:
-        path: /run/haproxy
-        state: absent
-      ignore_errors: true
-
-    - name: Eliminar directorio de estado de HAProxy (opcional)
-      file:
-        path: /var/lib/haproxy
-        state: absent
-      ignore_errors: true
-
-    # 4. Recargar configuración del sistema
-    - name: Recargar configuración sysctl
-      command: sysctl --system
-      ignore_errors: true
-
-    # 5. Desinstalar paquetes
-    - name: Desinstalar HAProxy y Keepalived
+    - name: Eliminar binarios en sistemas RHEL-like
       package:
         name:
           - haproxy
           - keepalived
         state: absent
-      ignore_errors: true
+      when: ansible_facts['os_family'] == 'RedHat'
 
-    # 6. Eliminar usuario y grupo haproxy
-    - name: Eliminar usuario haproxy (si existe)
-      user:
-        name: haproxy
-        state: absent
-        remove: yes
-      ignore_errors: true
-
-    - name: Eliminar grupo haproxy (si existe)
-      group:
-        name: haproxy
-        state: absent
-      ignore_errors: true
-
-    # 7. Limpieza y recarga de systemd
-    - name: Recargar daemon de systemd
-      systemd:
-        daemon_reload: true
-
-    - name: Reejecutar systemd para reinicializar servicios
+    - name: Recargar systemd tras eliminar servicios
       command: systemctl daemon-reexec
-      ignore_errors: true
+      become: true
