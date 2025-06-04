@@ -1,20 +1,16 @@
 # templates/keepalived/keepalived.conf.j2
 # ==========================================
 # Keepalived Configuration Template
-# Supports Two VIPs: API (6443) and Ingress (80/443)
-# Compatible with Flatcar and RHEL-like systems
+# Two VIPs: API (6443) and Ingress (80/443)
+# Interface: eth1 (dedicada para tráfico VIP)
 # ==========================================
 
 global_defs {
     router_id {{ inventory_hostname }}
 }
 
-# ==========================================
-# HAProxy health-check script
-# Works in both Flatcar and RHEL systems
-# ==========================================
 vrrp_script chk_haproxy {
-    script "/usr/bin/pidof haproxy"
+    script "/bin/bash -c 'systemctl is-active haproxy >/dev/null 2>&1'"
     interval 2
     timeout 5
     fall 2
@@ -22,12 +18,9 @@ vrrp_script chk_haproxy {
     weight -10
 }
 
-# ==========================================
-# VIP 1: Kubernetes API (6443)
-# ==========================================
 vrrp_instance VI_API {
     state BACKUP
-    interface {{ keepalived_interface }}
+    interface eth1
     virtual_router_id 51
     priority {{ keepalived_priority_api | default(100) }}
     advert_int 1
@@ -38,7 +31,7 @@ vrrp_instance VI_API {
     }
 
     virtual_ipaddress {
-        {{ api_vip }}/24 dev {{ keepalived_interface }}
+        {{ api_vip }}/32 dev eth1
     }
 
     track_script {
@@ -46,16 +39,13 @@ vrrp_instance VI_API {
     }
 
     track_interface {
-        {{ keepalived_interface }}
+        eth1
     }
 }
 
-# ==========================================
-# VIP 2: Ingress HTTP/HTTPS (80/443)
-# ==========================================
 vrrp_instance VI_INGRESS {
     state BACKUP
-    interface {{ keepalived_interface }}
+    interface eth1
     virtual_router_id 52
     priority {{ keepalived_priority_ingress | default(100) }}
     advert_int 1
@@ -66,7 +56,7 @@ vrrp_instance VI_INGRESS {
     }
 
     virtual_ipaddress {
-        {{ second_vip }}/24 dev {{ keepalived_interface }}
+        {{ second_vip }}/32 dev eth1
     }
 
     track_script {
@@ -74,6 +64,6 @@ vrrp_instance VI_INGRESS {
     }
 
     track_interface {
-        {{ keepalived_interface }}
+        eth1
     }
 }

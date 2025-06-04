@@ -23,6 +23,8 @@
     haproxy_stats_refresh: 10s
     haproxy_stats_auth_user: "admin"
     haproxy_stats_auth_pass: "changeme"
+    keepalived_interface: eth1
+
 
   tasks:
     - name: Detectar si es Flatcar Container Linux
