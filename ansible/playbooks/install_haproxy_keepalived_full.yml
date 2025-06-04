@@ -4,4 +4,4 @@
   import_playbook: create_keepalived_notify_scripts.yml
 
 - name: "Instalar servicios y configuración de HAProxy + Keepalived"
-  import_playbook: install_haproxy_keepalived.yml
+  import_playbook: haproxy_keepalived.yml
