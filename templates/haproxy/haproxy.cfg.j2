@@ -33,10 +33,7 @@ defaults
     errorfile 503 /etc/haproxy/errors/503.http
     errorfile 504 /etc/haproxy/errors/504.http
 
-# =========================================
-# Kubernetes API Server Load Balancer (6443)
-# VIP: {{ api_vip }}
-# =========================================
+# Kubernetes API (VIP)
 frontend k8s_api
     bind {{ api_vip }}:6443 transparent
     mode tcp
@@ -52,10 +49,7 @@ backend k8s_api_backend
     server {{ host }} {{ host }}:6443 check
 {% endfor %}
 
-# =========================================
-# Ingress Controller HTTP (80)
-# VIP: {{ second_vip }}
-# =========================================
+# Ingress HTTP (VIP)
 frontend ingress_http
     bind {{ second_vip }}:80 transparent
     mode tcp
@@ -71,10 +65,7 @@ backend ingress_http_backend
     server {{ host }} {{ host }}:80 check
 {% endfor %}
 
-# =========================================
-# Ingress Controller HTTPS (443)
-# VIP: {{ second_vip }}
-# =========================================
+# Ingress HTTPS (VIP)
 frontend ingress_https
     bind {{ second_vip }}:443 transparent
     mode tcp
@@ -90,9 +81,7 @@ backend ingress_https_backend
     server {{ host }} {{ host }}:443 check
 {% endfor %}
 
-# ================================
-# Optional: HAProxy Stats Interface
-# ================================
+# Opcional: Panel de Stats
 {% if haproxy_stats_enabled %}
 listen stats
     bind {{ haproxy_stats_bind_address }}:{{ haproxy_stats_port }}
@@ -103,4 +92,5 @@ listen stats
     stats show-node
     stats auth {{ haproxy_stats_auth_user }}:{{ haproxy_stats_auth_pass }}
 {% endif %}
+
 
