@@ -5,9 +5,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - group_vars/haproxy_keepalived.yml
-
   tasks:
     - name: Detectar si es Flatcar Container Linux
       shell: grep -q 'Flatcar' /etc/os-release && echo true || echo false
@@ -107,18 +104,9 @@
           After=haproxy.service
       notify: 🔄 Reload systemd
 
-    - name: Detectar interfaz de red principal
-      command: ip -4 route get 8.8.8.8
-      register: default_route
-      changed_when: false
-
-    - name: Definir interfaz para Keepalived
-      set_fact:
-        keepalived_interface: "{{ default_route.stdout.split('dev')[1].split()[0] }}"
-
-    - name: Mostrar interfaz detectada para Keepalived
+    - name: Verificar variable keepalived_interface
       debug:
-        msg: "Interfaz usada: {{ keepalived_interface }}"
+        var: keepalived_interface
 
     - name: Plantilla de configuración Keepalived
       template:
