@@ -1,7 +1,7 @@
 # group_vars/haproxy_keepalived.yml
 
 # Interfaz física usada por Keepalived
-keepalived_interface: eth1
+keepalived_interface: eth0
 
 # VIPs para HA
 api_vip: "10.17.5.10"

@@ -4,7 +4,6 @@
 # Two VIPs: API (6443) and Ingress (80/443)
 # Interface: eth1 (dedicada para tráfico VIP)
 # ==========================================
-
 global_defs {
     router_id {{ inventory_hostname }}
 }
@@ -20,7 +19,7 @@ vrrp_script chk_haproxy {
 
 vrrp_instance VI_API {
     state BACKUP
-    interface eth1
+    interface {{ keepalived_interface }}
     virtual_router_id 51
     priority {{ keepalived_priority_api | default(100) }}
     advert_int 1
@@ -31,7 +30,7 @@ vrrp_instance VI_API {
     }
 
     virtual_ipaddress {
-        {{ api_vip }}/32 dev eth1
+        {{ api_vip }}/32 dev {{ keepalived_interface }}
     }
 
     track_script {
@@ -39,13 +38,13 @@ vrrp_instance VI_API {
     }
 
     track_interface {
-        eth1
+        {{ keepalived_interface }}
     }
 }
 
 vrrp_instance VI_INGRESS {
     state BACKUP
-    interface eth1
+    interface {{ keepalived_interface }}
     virtual_router_id 52
     priority {{ keepalived_priority_ingress | default(100) }}
     advert_int 1
@@ -56,7 +55,7 @@ vrrp_instance VI_INGRESS {
     }
 
     virtual_ipaddress {
-        {{ second_vip }}/32 dev eth1
+        {{ second_vip }}/32 dev {{ keepalived_interface }}
     }
 
     track_script {
@@ -64,6 +63,6 @@ vrrp_instance VI_INGRESS {
     }
 
     track_interface {
-        eth1
+        {{ keepalived_interface }}
     }
 }
