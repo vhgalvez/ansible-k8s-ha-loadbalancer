@@ -20,7 +20,11 @@
         dest: /etc/keepalived/scripts/vip_master.sh
         content: |
           #!/bin/bash
-          echo "$(date) - $(hostname) asumió MASTER para $1" >> /var/log/keepalived_vip.log
+          {
+            logger -t keepalived-notify "[MASTER] $(hostname) tomó control de $1"
+            echo "$(date) - $(hostname) → MASTER para $1" >> /var/log/keepalived_vip.log
+            ip a >> /var/log/keepalived_vip.log
+          } 2>> /var/log/keepalived_vip_error.log
         mode: '0755'
         owner: root
         group: root
@@ -30,7 +34,11 @@
         dest: /etc/keepalived/scripts/vip_backup.sh
         content: |
           #!/bin/bash
-          echo "$(date) - $(hostname) cambió a BACKUP para $1" >> /var/log/keepalived_vip.log
+          {
+            logger -t keepalived-notify "[BACKUP] $(hostname) cambió a BACKUP para $1"
+            echo "$(date) - $(hostname) → BACKUP para $1" >> /var/log/keepalived_vip.log
+            ip a >> /var/log/keepalived_vip.log
+          } 2>> /var/log/keepalived_vip_error.log
         mode: '0755'
         owner: root
         group: root
@@ -40,7 +48,11 @@
         dest: /etc/keepalived/scripts/vip_fault.sh
         content: |
           #!/bin/bash
-          echo "$(date) - $(hostname) entró en estado FAULT para $1" >> /var/log/keepalived_vip.log
+          {
+            logger -t keepalived-notify "[FAULT] $(hostname) entró en estado FAULT para $1"
+            echo "$(date) - $(hostname) → FAULT para $1" >> /var/log/keepalived_vip.log
+            ip a >> /var/log/keepalived_vip.log
+          } 2>> /var/log/keepalived_vip_error.log
         mode: '0755'
         owner: root
         group: root

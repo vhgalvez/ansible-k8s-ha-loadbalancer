@@ -28,10 +28,7 @@
 
     - name: Habilitar puertos SELinux para HAProxy
       command: semanage port -a -t http_port_t -p tcp {{ item }}
-      loop:
-        - 6443
-        - 80
-        - 443
+      loop: [6443, 80, 443]
       ignore_errors: true
       when: is_flatcar.stdout != 'true'
 
@@ -84,14 +81,12 @@
         state: directory
         mode: "0755"
 
-    - name: Plantilla de override systemd para HAProxy
+    - name: Plantilla override HAProxy
       template:
         src: "../../templates/haproxy/haproxy-override.conf.j2"
         dest: /etc/systemd/system/haproxy.service.d/override.conf
         mode: "0644"
-      notify:
-        - Reload systemd
-        - Restart HAProxy
+      notify: [Reload systemd, Restart HAProxy]
 
     - name: Crear carpeta override para Keepalived en systemd
       file:
@@ -99,41 +94,49 @@
         state: directory
         mode: "0755"
 
-    - name: Crear override systemd para Keepalived
+    - name: Override systemd para Keepalived (dependencia de HAProxy)
       copy:
         dest: /etc/systemd/system/keepalived.service.d/override.conf
         content: |
           [Unit]
-          After=haproxy.service
+          After=network.target haproxy.service
+          Wants=network.target
       notify: Reload systemd
 
-    - name: Verificar variable keepalived_interface
-      debug:
-        var: keepalived_interface
-
-    - name: Plantilla de configuración Keepalived
+    - name: Plantilla configuración Keepalived
       template:
         src: "{{ keepalived_config_template }}"
         dest: "{{ keepalived_config_dir }}/keepalived.conf"
         mode: "0644"
       notify: Restart Keepalived
 
-    - name: Plantilla de configuración HAProxy
+    - name: Plantilla configuración HAProxy
       template:
         src: "{{ haproxy_config_template }}"
         dest: "{{ haproxy_config_dir }}/haproxy.cfg"
         mode: "0644"
       notify: Validate HAProxy config
 
-    - name: Borrar socket antiguo si existe
+    - name: Eliminar socket HAProxy antiguo
       file:
         path: "{{ haproxy_socket_file }}"
         state: absent
 
+    - name: Asegurar arranque automático de HAProxy
+      systemd:
+        name: haproxy
+        enabled: true
+        state: started
+
+    - name: Asegurar arranque automático de Keepalived
+      systemd:
+        name: keepalived
+        enabled: true
+        state: started
+
   handlers:
     - name: Reload systemd
-      command: systemctl daemon-reload
-      become: true
+      command: systemctl daemon-reexec
 
     - name: Validate HAProxy config
       command: "haproxy -c -f {{ haproxy_config_dir }}/haproxy.cfg"
@@ -147,11 +150,9 @@
         name: haproxy
         state: restarted
         enabled: true
-      become: true
 
     - name: Restart Keepalived
       systemd:
         name: keepalived
         state: restarted
         enabled: true
-      become: true
